@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useWardrobe } from '../shared/hooks'
+import { useChildren, useWardrobe } from '../shared/hooks'
 import { getStore, requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
 import AddFlow from './AddFlow'
 import BackupPanel from './BackupPanel'
+import ChildrenPanel from './ChildrenPanel'
 import Gate, { randomSum } from './Gate'
 import type { Sum } from './Gate'
 import ItemDetail from './ItemDetail'
@@ -76,7 +77,7 @@ export interface ParentAppProps {
   makeSum?: () => Sum
 }
 
-type View = { name: 'wardrobe' } | { name: 'add' } | { name: 'item'; id: string } | { name: 'settings' } | { name: 'backup' }
+type View = { name: 'wardrobe' } | { name: 'add' } | { name: 'item'; id: string } | { name: 'settings' } | { name: 'backup' } | { name: 'children' }
 
 export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps) {
   const [unlocked, setUnlocked] = useState(() => isUnlocked())
@@ -91,6 +92,7 @@ export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps
     return (
       <Gate
         sum={sum}
+        store={store}
         onUnlock={() => {
           touchUnlock()
           setUnlocked(true)
@@ -103,6 +105,7 @@ export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps
 
 function ParentMain({ store }: { store: WardrobeStore }) {
   const { items, settings, loading, error, reload } = useWardrobe(store)
+  const { children, loading: childrenLoading, error: childrenError, reload: reloadChildren } = useChildren(store)
   const [view, setView] = useState<View>({ name: 'wardrobe' })
 
   // Vraag de browser de kledingkast te beschermen tegen automatisch opruimen.
@@ -111,7 +114,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
   }, [])
 
   const open = view.name === 'item' ? items.find((item) => item.id === view.id) : undefined
-  const tab = view.name === 'settings' || view.name === 'backup' ? view.name : 'wardrobe'
+  const tab = view.name === 'settings' || view.name === 'backup' || view.name === 'children' ? view.name : 'wardrobe'
   const goHome = () => setView({ name: 'wardrobe' })
 
   let content
@@ -133,10 +136,18 @@ function ParentMain({ store }: { store: WardrobeStore }) {
       </div>
     )
   } else if (view.name === 'add') {
-    content = <AddFlow store={store} reload={reload} onDone={goHome} />
+    content = <AddFlow store={store} children={children} reload={reload} onDone={goHome} />
   } else if (view.name === 'item') {
     content = open ? (
-      <ItemDetail key={open.id} store={store} item={open} items={items} reload={reload} onBack={goHome} />
+      <ItemDetail
+        key={open.id}
+        store={store}
+        item={open}
+        items={items}
+        children={children}
+        reload={reload}
+        onBack={goHome}
+      />
     ) : (
       <div className="parent-card">
         <p>Dit kledingstuk bestaat niet meer.</p>
@@ -147,11 +158,26 @@ function ParentMain({ store }: { store: WardrobeStore }) {
     )
   } else if (view.name === 'settings') {
     content = <SettingsPanel store={store} settings={settings} reload={reload} />
+  } else if (view.name === 'children') {
+    content = <ChildrenPanel store={store} children={children} reload={reloadChildren} />
   } else if (view.name === 'backup') {
-    content = <BackupPanel store={store} reload={reload} />
+    content = <BackupPanel
+        store={store}
+        reload={async () => {
+          // Een back-up bevat ook kinderen: ververs beide.
+          await Promise.all([reload(), reloadChildren()])
+        }}
+      />
   } else {
     content = (
-      <Wardrobe items={items} onAdd={() => setView({ name: 'add' })} onOpen={(id) => setView({ name: 'item', id })} />
+      <Wardrobe
+        items={items}
+        // Toon de hint 'nog geen kind' pas als zeker is dat er echt geen kinderen zijn.
+        hasChildren={childrenLoading || childrenError !== undefined || children.length > 0}
+        onAdd={() => setView({ name: 'add' })}
+        onOpen={(id) => setView({ name: 'item', id })}
+        onOpenChildren={() => setView({ name: 'children' })}
+      />
     )
   }
 
@@ -167,7 +193,8 @@ function ParentMain({ store }: { store: WardrobeStore }) {
         {(
           [
             ['wardrobe', 'Kast'],
-            ['settings', 'Seizoen'],
+            ['children', 'Kinderen'],
+            ['settings', 'Instellingen'],
             ['backup', 'Back-up'],
           ] as const
         ).map(([name, label]) => (
@@ -185,6 +212,11 @@ function ParentMain({ store }: { store: WardrobeStore }) {
       {error && !(items.length === 0 && view.name === 'wardrobe') ? (
         <p role="alert" className="parent-error">
           {error}
+        </p>
+      ) : null}
+      {childrenError ? (
+        <p role="alert" className="parent-error">
+          {childrenError}
         </p>
       ) : null}
       {content}

@@ -1,16 +1,18 @@
 import { useId, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
-import type { Category, ClothingItem, ItemSeason } from '../domain/types'
+import type { Category, Child, ClothingItem, ItemSeason } from '../domain/types'
 import { resizePhoto } from '../domain/image'
+import { itemFitsChild } from '../domain/sizes'
 import { usePhotoUrl } from '../shared/hooks'
 import type { WardrobeStore } from '../storage'
-import { ChoiceGroup, Thumb, errorMessage, itemLabel } from './shared'
+import { ChoiceGroup, SizeField, Thumb, errorMessage, itemLabel, sizeSuggestions } from './shared'
 
 interface Props {
   store: WardrobeStore
   item: ClothingItem
   items: ClothingItem[]
+  children: Child[]
   reload: () => Promise<void>
   onBack: () => void
 }
@@ -23,9 +25,10 @@ const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
 const SEASONS: ItemSeason[] = ['summer', 'winter', 'all']
 const SEASON_OPTIONS = SEASONS.map((value) => ({ value, label: SEASON_LABELS[value] }))
 
-export default function ItemDetail({ store, item, items, reload, onBack }: Props) {
+export default function ItemDetail({ store, item, items, children, reload, onBack }: Props) {
   const [error, setError] = useState<string | undefined>()
   const [name, setName] = useState(item.name ?? '')
+  const [size, setSize] = useState(item.size ?? '')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
   /** Optimistische uitsluitingen: id van ander kledingstuk -> verwachte stand. */
@@ -54,6 +57,12 @@ export default function ItemDetail({ store, item, items, reload, onBack }: Props
     const trimmed = name.trim()
     if (trimmed === (item.name ?? '')) return
     await update({ name: trimmed === '' ? undefined : trimmed })
+  }
+
+  async function saveSize() {
+    const trimmed = size.trim()
+    if (trimmed === (item.size ?? '')) return
+    await update({ size: trimmed })
   }
 
   async function replacePhoto(event: ChangeEvent<HTMLInputElement>) {
@@ -137,6 +146,21 @@ export default function ItemDetail({ store, item, items, reload, onBack }: Props
           }}
         />
       </div>
+
+      <SizeField value={size} suggestions={sizeSuggestions(children, item.category)} onChange={setSize} onBlur={() => void saveSize()} />
+      {children.length > 0 ? (
+        <section className="parent-card" aria-labelledby="parent-fits-title">
+          <h3 id="parent-fits-title">Past bij</h3>
+          <ul className="parent-fits">
+            {children.map((child) => (
+              <li key={child.id}>
+                <span className="parent-child-dot" style={{ background: child.color }} aria-hidden="true" />
+                {child.name}: {itemFitsChild(item, child) ? 'ja' : 'nee'}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <ChoiceGroup
         legend="Categorie"

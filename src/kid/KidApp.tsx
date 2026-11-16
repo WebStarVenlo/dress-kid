@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   chooseItem,
@@ -9,9 +9,10 @@ import {
   todayKey,
   visibleCategories,
 } from '../domain/compat'
+import { itemFitsChild } from '../domain/sizes'
 import { CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
-import type { Category, ClothingItem, Outfit } from '../domain/types'
-import { usePhotoUrl, useWardrobe } from '../shared/hooks'
+import type { Category, Child, ClothingItem, Outfit } from '../domain/types'
+import { useChildren, usePhotoUrl, useWardrobe } from '../shared/hooks'
 import { getStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 import './kid.css'
@@ -34,6 +35,29 @@ type Screen = 'choose' | 'done'
 const UNDO_MS = 5000
 /** Hoe vaak we controleren of het inmiddels een nieuwe dag is. */
 const DAY_CHECK_MS = 60_000
+/** Sleutel in localStorage waaronder het gekozen kind onthouden wordt. */
+export const ACTIVE_CHILD_KEY = 'dress-kid-active-child'
+
+function readActiveChild(): string | undefined {
+  try {
+    return window.localStorage.getItem(ACTIVE_CHILD_KEY) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+function writeActiveChild(id: string | undefined): void {
+  try {
+    if (id === undefined) window.localStorage.removeItem(ACTIVE_CHILD_KEY)
+    else window.localStorage.setItem(ACTIVE_CHILD_KEY, id)
+  } catch {
+    // Opslag niet beschikbaar: dan onthouden we de keuze gewoon niet.
+  }
+}
+
+function initial(child: Child): string {
+  return (Array.from(child.name.trim())[0] ?? '?').toUpperCase()
+}
 
 function itemLabel(item: ClothingItem): string {
   return item.name ?? CATEGORY_LABELS[item.category]
@@ -71,9 +95,136 @@ function ItemTile({
   )
 }
 
+function Avatar({ child, className }: { child: Child; className: string }) {
+  return (
+    <span className={className} style={{ backgroundColor: child.color }} aria-hidden="true">
+      {initial(child)}
+    </span>
+  )
+}
+
+function SimpleHeader({ title }: { title: string }) {
+  return (
+    <header className="kid-header">
+      <h1 className="kid-title">{title}</h1>
+      <div className="kid-header__actions">
+        <Link className="kid-parent-link" to="/ouder" aria-label="Voor ouders" title="Voor ouders">
+          <span aria-hidden="true">⚙️</span>
+        </Link>
+      </div>
+    </header>
+  )
+}
+
 export default function KidApp({ store }: { store?: WardrobeStore }) {
   const activeStore = store ?? getStore()
-  const { items, settings, loading, error, reload } = useWardrobe(activeStore)
+  const { children, loading, error, reload } = useChildren(activeStore)
+  const [chosenId, setChosenId] = useState<string | undefined>(readActiveChild)
+
+  if (loading) {
+    return (
+      <main className="kid-app">
+        <SimpleHeader title="Wat trek je vandaag aan?" />
+        <p className="kid-status" role="status">
+          <span className="kid-bounce" aria-hidden="true">
+            👕
+          </span>
+          Even wachten…
+        </p>
+      </main>
+    )
+  }
+
+  if (error) {
+    return (
+      <main className="kid-app">
+        <SimpleHeader title="Wat trek je vandaag aan?" />
+        <div className="kid-status" role="alert">
+          <p>{error}</p>
+          <button type="button" className="kid-big-btn" onClick={() => void reload()}>
+            <span aria-hidden="true">🔄</span> Opnieuw proberen
+          </button>
+        </div>
+      </main>
+    )
+  }
+
+  if (children.length === 0) {
+    return (
+      <main className="kid-app">
+        <SimpleHeader title="Wat trek je vandaag aan?" />
+        <div className="kid-status kid-empty">
+          <div className="kid-empty__emoji" aria-hidden="true">
+            👋
+          </div>
+          <p>Hoi! Er is nog niemand om aan te kleden.</p>
+          <p>Een grote mens moet eerst een kind toevoegen.</p>
+          <Link className="button kid-big-btn" to="/ouder">
+            <span aria-hidden="true">⚙️</span> Naar de ouders
+          </Link>
+        </div>
+      </main>
+    )
+  }
+
+  // Een onthouden id die niet meer bestaat telt niet mee; met één kind is er niets te kiezen.
+  const child = children.length === 1 ? children[0] : children.find((c) => c.id === chosenId)
+
+  if (!child) {
+    return (
+      <main className="kid-app">
+        <SimpleHeader title="Wie ben jij?" />
+        <ul className="kid-profiles">
+          {children.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                className="kid-profile"
+                style={{ borderColor: c.color }}
+                onClick={() => {
+                  writeActiveChild(c.id)
+                  setChosenId(c.id)
+                }}
+              >
+                <Avatar child={c} className="kid-profile__avatar" />
+                <span className="kid-profile__name">{c.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </main>
+    )
+  }
+
+  return (
+    <KidDay
+      key={child.id}
+      store={activeStore}
+      child={child}
+      onSwitch={
+        children.length > 1
+          ? () => {
+              writeActiveChild(undefined)
+              setChosenId(undefined)
+            }
+          : undefined
+      }
+    />
+  )
+}
+
+function KidDay({
+  store: activeStore,
+  child,
+  onSwitch,
+}: {
+  store: WardrobeStore
+  child: Child
+  onSwitch: (() => void) | undefined
+}) {
+  const { items: allItems, settings, loading, error, reload } = useWardrobe(activeStore)
+  // Alleen kleding die dit kind past (op maat); de rest van de regels staat in compat.ts.
+  const items = useMemo(() => allItems.filter((item) => itemFitsChild(item, child)), [allItems, child])
   const [outfit, setOutfit] = useState<Outfit>({})
   const [outfitReady, setOutfitReady] = useState(false)
   const [screen, setScreen] = useState<Screen>('choose')
@@ -91,7 +242,7 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
     void (async () => {
       let saved: Outfit = {}
       try {
-        saved = (await activeStore.getOutfit(day))?.outfit ?? {}
+        saved = (await activeStore.getOutfit(child.id, day))?.outfit ?? {}
       } catch (e) {
         console.error(e)
       }
@@ -107,7 +258,7 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
     return () => {
       cancelled = true
     }
-  }, [loading, error, items, settings, activeStore, day])
+  }, [loading, error, items, settings, activeStore, child.id, day])
 
   // Is het inmiddels een nieuwe dag? Zo ja, begin opnieuw met een lege outfit en meld dat terug.
   const rollOverIfNeeded = useCallback((): boolean => {
@@ -146,9 +297,9 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
   const update = useCallback(
     (next: Outfit) => {
       setOutfit(next)
-      activeStore.saveOutfit(day, next).catch((e: unknown) => console.error(e))
+      activeStore.saveOutfit(child.id, day, next).catch((e: unknown) => console.error(e))
     },
-    [activeStore, day],
+    [activeStore, child.id, day],
   )
 
   const categories = visibleCategories(items, settings)
@@ -209,6 +360,18 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
     <header className="kid-header">
       <h1 className="kid-title">{title}</h1>
       <div className="kid-header__actions">
+        {onSwitch ? (
+          <button
+            type="button"
+            className="kid-switch"
+            style={{ borderColor: child.color }}
+            aria-label={`Wie ben jij? Nu: ${child.name}`}
+            title="Ander kind kiezen"
+            onClick={onSwitch}
+          >
+            <Avatar child={child} className="kid-switch__avatar" />
+          </button>
+        ) : null}
         {outfitReady && undoOutfit !== undefined ? (
           <button
             type="button"
@@ -274,7 +437,7 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
           <div className="kid-empty__emoji" aria-hidden="true">
             🧺
           </div>
-          {items.length === 0 ? (
+          {allItems.length === 0 ? (
             <>
               <p>De kleerkast is nog leeg.</p>
               <p>Een grote mens kan er kleren in doen.</p>
@@ -283,6 +446,9 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
             <>
               <p>Er zijn nu geen kleren om uit te kiezen.</p>
               <p>Een grote mens kan kijken naar het seizoen of naar kleren die in de was zijn.</p>
+              {items.length === 0 ? (
+                <p>Er is geen kleding in jouw maat. Vraag een grote mens om je maten na te kijken.</p>
+              ) : null}
             </>
           )}
           <Link className="button kid-big-btn" to="/ouder">

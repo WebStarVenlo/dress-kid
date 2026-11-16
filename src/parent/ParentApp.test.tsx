@@ -6,6 +6,7 @@ import type { Category, ClothingItem } from '../domain/types'
 import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 import ParentApp from './ParentApp'
+import { hashPin, resetPinAttempts } from './pin'
 import { UNLOCK_KEY, UNLOCK_TTL_MS } from './unlock'
 
 vi.mock('../domain/image', () => ({
@@ -64,6 +65,25 @@ describe('ouderslot', () => {
 
     await unlock()
     expect(Number(sessionStorage.getItem(UNLOCK_KEY))).toBeGreaterThan(0)
+  })
+
+  it('vraagt om de PIN van de meegegeven opslag en ontgrendelt met de juiste', async () => {
+    resetPinAttempts()
+    // Weinig iteraties houdt de test snel; de opgeslagen iteraties worden bij controle gebruikt.
+    await store.setParentPin(await hashPin('2580', undefined, 1000))
+    renderParent()
+    const field = await screen.findByLabelText('Pincode')
+    expect(screen.queryByLabelText(/Hoeveel is 7 × 6/)).not.toBeInTheDocument()
+
+    fireEvent.change(field, { target: { value: '1111' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ontgrendelen' }))
+    expect(await screen.findByText(/niet de goede pincode/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Kleding toevoegen' })).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Pincode'), { target: { value: '2580' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ontgrendelen' }))
+    expect(await screen.findByRole('button', { name: 'Kleding toevoegen' })).toBeInTheDocument()
+    resetPinAttempts()
   })
 
   it('blijft ontgrendeld bij herladen binnen de tijd', async () => {
@@ -172,6 +192,15 @@ describe('ouderslot', () => {
 })
 
 describe('kledingkast', () => {
+  it('toont de hint over een ontbrekend kind niet als de kinderen niet geladen konden worden', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.spyOn(store, 'listChildren').mockRejectedValue(new Error('kapot'))
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now()))
+    renderParent()
+    expect(await screen.findByText(/kinderen konden niet worden geladen/)).toBeInTheDocument()
+    expect(screen.queryByText('Nog geen kind aangemaakt.')).not.toBeInTheDocument()
+  })
+
   it('toont een lege staat', async () => {
     renderParent()
     await unlock()
@@ -274,7 +303,7 @@ describe('instellingen en back-up', () => {
   it('slaat het seizoen op', async () => {
     renderParent()
     await unlock()
-    fireEvent.click(screen.getByRole('button', { name: 'Seizoen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Instellingen' }))
     fireEvent.click(await screen.findByRole('radio', { name: 'Winter' }))
     await waitFor(async () => expect((await store.getSettings()).currentSeason).toBe('winter'))
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Winter' })).toHaveAttribute('aria-checked', 'true'))

@@ -1,5 +1,7 @@
+import { useId } from 'react'
+import { normalizeSize } from '../domain/sizes'
 import { CATEGORY_LABELS } from '../domain/types'
-import type { ClothingItem } from '../domain/types'
+import type { Category, Child, ClothingItem } from '../domain/types'
 import { usePhotoUrl } from '../shared/hooks'
 
 export function itemLabel(item: Pick<ClothingItem, 'name' | 'category'>): string {
@@ -50,6 +52,60 @@ export function ChoiceGroup<T extends string>({ legend, value, options, onChange
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+/** Alle maten die een kind voor deze categorie heeft, zonder dubbelen (hoofdletterongevoelig). */
+export function sizeSuggestions(children: Child[], category: Category | undefined): string[] {
+  if (!category) return []
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const child of children) {
+    for (const size of child.sizes[category] ?? []) {
+      const key = normalizeSize(size)
+      if (key === '' || seen.has(key)) continue
+      seen.add(key)
+      result.push(size)
+    }
+  }
+  return result
+}
+
+interface SizeFieldProps {
+  value: string
+  suggestions: string[]
+  onChange: (value: string) => void
+  onBlur?: () => void
+}
+
+/** Optioneel maatveld met suggesties uit de maten van de kinderen. */
+export function SizeField({ value, suggestions, onChange, onBlur }: SizeFieldProps) {
+  const inputId = useId()
+  const listId = useId()
+  return (
+    <div className="parent-field">
+      <label htmlFor={inputId} className="parent-field-label">
+        Maat (mag leeg blijven)
+      </label>
+      <input
+        id={inputId}
+        type="text"
+        list={listId}
+        value={value}
+        maxLength={20}
+        placeholder="bijv. 110"
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && onBlur) event.currentTarget.blur()
+        }}
+      />
+      <datalist id={listId}>
+        {suggestions.map((size) => (
+          <option key={size} value={size} />
+        ))}
+      </datalist>
     </div>
   )
 }

@@ -69,6 +69,8 @@ export interface ClothingItem {
    * Uitsluitingen zijn symmetrisch: de opslaglaag houdt beide kanten bij.
    */
   excludedIds: string[];
+  /** Optionele maat (vrije tekst, bijv. "110" of "28"). Zonder maat past het bij ieder kind. */
+  size?: string;
   /** Verkleinde foto. */
   photo: Blob;
   createdAt: number;
@@ -78,7 +80,35 @@ export interface NewClothingItem {
   category: Category;
   name?: string;
   season: ItemSeason;
+  size?: string;
   photo: Blob;
+}
+
+/** Maten per categorie; een kind kan per categorie meerdere maten hebben. */
+export type ChildSizes = Partial<Record<Category, string[]>>;
+
+export interface Child {
+  id: string;
+  name: string;
+  /** CSS-kleur (hex, bijv. "#ff8800") voor de profieltegel. */
+  color: string;
+  sizes: ChildSizes;
+  createdAt: number;
+}
+
+export interface NewChild {
+  name: string;
+  color: string;
+  sizes: ChildSizes;
+}
+
+/** Gehashte ouder-PIN (PBKDF2-SHA-256). Wordt nooit in een back-up meegenomen. */
+export interface StoredPin {
+  /** Base64-gecodeerde salt. */
+  salt: string;
+  /** Base64-gecodeerde afgeleide sleutel. */
+  hash: string;
+  iterations: number;
 }
 
 export interface Settings {
@@ -92,6 +122,7 @@ export type Outfit = Partial<Record<Category, string>>;
 
 /** De outfit die het kind voor een bepaalde dag heeft gekozen. */
 export interface SavedOutfit {
+  childId: string;
   /** Lokale datum, formaat YYYY-MM-DD. */
   date: string;
   outfit: Outfit;
