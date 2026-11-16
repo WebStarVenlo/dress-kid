@@ -363,3 +363,80 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* Kinderen en maten */
+.parent-children {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.parent-child {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.parent-child-dot {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  flex: none;
+  border: 2px solid var(--parent-border);
+}
+
+.parent-child-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.parent-swatches {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.parent-swatch {
+  width: 2.5rem;
+  height: 2.5rem;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 3px solid var(--parent-border);
+}
+
+.parent-swatch.is-selected {
+  border-color: var(--color-text);
+}
+
+.parent-sizes {
+  border: 0;
+  padding: 0;
+  margin: 0 0 var(--space);
+}
+
+.parent-size-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 9rem) 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.parent-fits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.parent-fits li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}

@@ -4,13 +4,26 @@ import { Thumb, itemLabel } from './shared'
 
 interface WardrobeProps {
   items: ClothingItem[]
+  /** False zolang er nog geen kind is aangemaakt. */
+  hasChildren: boolean
   onAdd: () => void
   onOpen: (id: string) => void
+  onOpenChildren: () => void
 }
 
-export default function Wardrobe({ items, onAdd, onOpen }: WardrobeProps) {
+export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChildren }: WardrobeProps) {
   return (
     <section aria-labelledby="parent-wardrobe-title">
+      {hasChildren ? null : (
+        <div className="parent-card">
+          <p>
+            <strong>Nog geen kind aangemaakt.</strong> De kinderomgeving heeft minstens één kind nodig.
+          </p>
+          <button type="button" onClick={onOpenChildren}>
+            Kind toevoegen
+          </button>
+        </div>
+      )}
       <button type="button" className="parent-add-button" onClick={onAdd}>
         <span aria-hidden="true">📷</span> Kleding toevoegen
       </button>
@@ -48,6 +61,7 @@ export default function Wardrobe({ items, onAdd, onOpen }: WardrobeProps) {
                     >
                       <Thumb photo={item.photo} />
                       <span className="parent-badges">
+                        {item.size ? <span className="parent-badge">Maat {item.size}</span> : null}
                         {item.season !== 'all' ? (
                           <span className="parent-badge">{SEASON_LABELS[item.season]}</span>
                         ) : null}

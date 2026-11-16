@@ -1,14 +1,15 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
-import type { Category, ItemSeason } from '../domain/types'
+import type { Category, Child, ItemSeason } from '../domain/types'
 import { resizePhoto } from '../domain/image'
 import { requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
-import { ChoiceGroup, Thumb, errorMessage } from './shared'
+import { ChoiceGroup, SizeField, Thumb, errorMessage, sizeSuggestions } from './shared'
 
 interface AddFlowProps {
   store: WardrobeStore
+  children: Child[]
   reload: () => Promise<void>
   onDone: () => void
 }
@@ -27,9 +28,10 @@ const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
 const SEASONS: ItemSeason[] = ['summer', 'winter', 'all']
 const SEASON_OPTIONS = SEASONS.map((value) => ({ value, label: SEASON_LABELS[value] }))
 
-export default function AddFlow({ store, reload, onDone }: AddFlowProps) {
+export default function AddFlow({ store, children, reload, onDone }: AddFlowProps) {
   const [category, setCategory] = useState<Category | undefined>()
   const [season, setSeason] = useState<ItemSeason>('all')
+  const [size, setSize] = useState('')
   const [added, setAdded] = useState<Added[]>([])
   const [errors, setErrors] = useState<string[]>([])
   const [progress, setProgress] = useState<{ done: number; total: number } | undefined>()
@@ -49,7 +51,7 @@ export default function AddFlow({ store, reload, onDone }: AddFlowProps) {
     for (const [index, file] of files.entries()) {
       try {
         const photo = await resizePhoto(file)
-        const item = await store.addItem({ category, season, photo })
+        const item = await store.addItem({ category, season, size: size.trim() || undefined, photo })
         if (!requestedPersist) {
           requestedPersist = true
           void requestPersistentStorage()
@@ -74,6 +76,7 @@ export default function AddFlow({ store, reload, onDone }: AddFlowProps) {
       <h2 id="parent-add-title">Kleding toevoegen</h2>
       <ChoiceGroup legend="Wat is het?" value={category} options={CATEGORY_OPTIONS} onChange={setCategory} big />
       <ChoiceGroup legend="Wanneer draagt je kind het?" value={season} options={SEASON_OPTIONS} onChange={setSeason} />
+      <SizeField value={size} suggestions={sizeSuggestions(children, category)} onChange={setSize} />
 
       <div className="parent-photo-actions">
         <button type="button" disabled={!ready} onClick={() => cameraRef.current?.click()}>
