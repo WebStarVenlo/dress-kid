@@ -92,6 +92,7 @@ export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps
     return (
       <Gate
         sum={sum}
+        store={store}
         onUnlock={() => {
           touchUnlock()
           setUnlocked(true)
@@ -104,7 +105,7 @@ export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps
 
 function ParentMain({ store }: { store: WardrobeStore }) {
   const { items, settings, loading, error, reload } = useWardrobe(store)
-  const { children, error: childrenError, reload: reloadChildren } = useChildren(store)
+  const { children, loading: childrenLoading, error: childrenError, reload: reloadChildren } = useChildren(store)
   const [view, setView] = useState<View>({ name: 'wardrobe' })
 
   // Vraag de browser de kledingkast te beschermen tegen automatisch opruimen.
@@ -160,12 +161,19 @@ function ParentMain({ store }: { store: WardrobeStore }) {
   } else if (view.name === 'children') {
     content = <ChildrenPanel store={store} children={children} reload={reloadChildren} />
   } else if (view.name === 'backup') {
-    content = <BackupPanel store={store} reload={reload} />
+    content = <BackupPanel
+        store={store}
+        reload={async () => {
+          // Een back-up bevat ook kinderen: ververs beide.
+          await Promise.all([reload(), reloadChildren()])
+        }}
+      />
   } else {
     content = (
       <Wardrobe
         items={items}
-        hasChildren={children.length > 0}
+        // Toon de hint 'nog geen kind' pas als zeker is dat er echt geen kinderen zijn.
+        hasChildren={childrenLoading || childrenError !== undefined || children.length > 0}
         onAdd={() => setView({ name: 'add' })}
         onOpen={(id) => setView({ name: 'item', id })}
         onOpenChildren={() => setView({ name: 'children' })}

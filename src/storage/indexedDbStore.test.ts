@@ -182,6 +182,13 @@ describe('createIndexedDbStore: kinderen', () => {
     expect(await store.listChildren()).toEqual([a, b])
   })
 
+  it('vouwt een kleur van 3 cijfers uit naar #rrggbb (ook bij updateChild)', async () => {
+    const store = freshStore()
+    const child = await store.addChild(newChild({ color: ' #0AF ' }))
+    expect(child.color).toBe('#00aaff')
+    expect((await store.updateChild(child.id, { color: '#F80' })).color).toBe('#ff8800')
+  })
+
   it('schoont de maten op', async () => {
     const store = freshStore()
     const child = await store.addChild(
@@ -225,7 +232,7 @@ describe('createIndexedDbStore: kinderen', () => {
     })
     expect(renamed).toEqual({ ...a, name: 'Noortje' })
     const recolored = await store.updateChild(a.id, { color: '#123', sizes: { shoes: ['28'] } })
-    expect(recolored).toEqual({ ...a, name: 'Noortje', color: '#123', sizes: { shoes: ['28'] } })
+    expect(recolored).toEqual({ ...a, name: 'Noortje', color: '#112233', sizes: { shoes: ['28'] } })
     expect(await store.listChildren()).toEqual([recolored])
   })
 
@@ -577,6 +584,14 @@ describe('createIndexedDbStore: back-up', () => {
     expect(await store.getSettings()).toEqual(DEFAULT_SETTINGS)
   })
 
+  it('importeert een kind zonder maten met lege maten en vouwt korte kleuren uit', async () => {
+    const store = freshStore()
+    await store.importBackup(
+      jsonBlob(validBackup({ children: [{ id: 'k1', name: 'Noor', color: '#F80', createdAt: 1 }] })),
+    )
+    expect(await store.listChildren()).toEqual([{ id: 'k1', name: 'Noor', color: '#ff8800', sizes: {}, createdAt: 1 }])
+  })
+
   it('schoont kinderen, maten en dubbele outfits op bij importeren', async () => {
     const store = freshStore()
     await store.importBackup(
@@ -670,7 +685,6 @@ describe('createIndexedDbStore: back-up', () => {
     ['kind zonder naam', jsonBlob(validBackup({ children: [child({ name: '  ' })] }))],
     ['kind met te lange naam', jsonBlob(validBackup({ children: [child({ name: 'x'.repeat(41) })] }))],
     ['kind met ongeldige kleur', jsonBlob(validBackup({ children: [child({ color: 'red' })] }))],
-    ['kind zonder maten', jsonBlob(validBackup({ children: [child({ sizes: undefined })] }))],
     ['kind met onbekende maatcategorie', jsonBlob(validBackup({ children: [child({ sizes: { hoed: ['1'] } })] }))],
     ['kind met maten geen array', jsonBlob(validBackup({ children: [child({ sizes: { top: '110' } })] }))],
     ['kind met te lange maat', jsonBlob(validBackup({ children: [child({ sizes: { top: ['x'.repeat(21)] } })] }))],

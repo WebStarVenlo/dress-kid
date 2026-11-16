@@ -216,7 +216,9 @@ function cleanChildName(name: unknown): string {
 function cleanColor(color: unknown): string {
   const trimmed = typeof color === 'string' ? color.trim() : ''
   if (!COLOR_RE.test(trimmed)) throw new Error('Kies een geldige kleur.')
-  return trimmed.toLowerCase()
+  // <input type="color"> vraagt #rrggbb: vouw #rgb uit naar #rrggbb.
+  const hex = trimmed.slice(1).toLowerCase()
+  return hex.length === 3 ? `#${Array.from(hex, (c) => c + c).join('')}` : `#${hex}`
 }
 
 /**
@@ -352,7 +354,7 @@ function parseChild(value: unknown, index: number): Child {
     id,
     name: orInvalid(() => cleanChildName(name), `${label} heeft een ongeldige naam`),
     color: orInvalid(() => cleanColor(color), `${label} heeft een ongeldige kleur`),
-    sizes: orInvalid(() => cleanChildSizes(sizes), `${label} heeft ongeldige maten`),
+    sizes: orInvalid(() => cleanChildSizes(sizes ?? {}), `${label} heeft ongeldige maten`),
     createdAt,
   }
 }

@@ -4,7 +4,7 @@ import { Thumb, itemLabel } from './shared'
 
 interface WardrobeProps {
   items: ClothingItem[]
-  /** False zolang er nog geen kind is aangemaakt. */
+  /** False als zeker is dat er nog geen kind is aangemaakt (niet tijdens laden of na een laadfout). */
   hasChildren: boolean
   onAdd: () => void
   onOpen: (id: string) => void

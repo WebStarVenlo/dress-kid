@@ -76,6 +76,10 @@ export async function verifyPin(pin: string, stored: StoredPin): Promise<boolean
 // ---------------------------------------------------------------------------
 // Pogingen tellen (alleen in het geheugen: overleeft wisselen van scherm, niet herladen)
 
+/*
+ * De teller en de wachttijd staan alleen in het geheugen van deze pagina en beginnen opnieuw na het
+ * herladen van de pagina. Dat is acceptabel: dit is een kinderslot, geen echte beveiliging.
+ */
 let failedAttempts = 0
 let blockedUntil = 0
 

@@ -56,7 +56,7 @@ function writeActiveChild(id: string | undefined): void {
 }
 
 function initial(child: Child): string {
-  return (child.name.trim()[0] ?? '?').toUpperCase()
+  return (Array.from(child.name.trim())[0] ?? '?').toUpperCase()
 }
 
 function itemLabel(item: ClothingItem): string {
@@ -446,6 +446,9 @@ function KidDay({
             <>
               <p>Er zijn nu geen kleren om uit te kiezen.</p>
               <p>Een grote mens kan kijken naar het seizoen of naar kleren die in de was zijn.</p>
+              {items.length === 0 ? (
+                <p>Er is geen kleding in jouw maat. Vraag een grote mens om je maten na te kijken.</p>
+              ) : null}
             </>
           )}
           <Link className="button kid-big-btn" to="/ouder">

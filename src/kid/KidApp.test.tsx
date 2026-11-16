@@ -67,6 +67,33 @@ describe('KidApp', () => {
     expect(screen.queryByText('De kleerkast is nog leeg.')).not.toBeInTheDocument()
   })
 
+  it('legt uit dat er niets in de maat van het kind is, maar alleen dan', async () => {
+    const store = emptyStore()
+    await store.addChild({ name: 'Sam', color: '#3366ff', sizes: { top: ['104'] } })
+    await store.addItem({ category: 'top', name: 'Maat 116', size: '116', season: 'all', photo: new Blob(['b']) })
+    renderKid(store)
+    expect(await screen.findByText('Er zijn nu geen kleren om uit te kiezen.')).toBeInTheDocument()
+    expect(screen.getByText(/Er is geen kleding in jouw maat/)).toBeInTheDocument()
+  })
+
+  it('toont de maat-hint niet als kleding alleen in de was ligt', async () => {
+    const store = await newStore()
+    const item = await add(store, 'top', 'Rood shirt')
+    await store.updateItem(item.id, { available: false })
+    renderKid(store)
+    await screen.findByText('Er zijn nu geen kleren om uit te kiezen.')
+    expect(screen.queryByText(/in jouw maat/)).not.toBeInTheDocument()
+  })
+
+  it('toont als beginletter van het kind een hele emoji', async () => {
+    const store = emptyStore()
+    await store.addChild({ name: '🦊 Vos', color: '#3366ff', sizes: {} })
+    await store.addChild({ name: 'Noor', color: '#ff6699', sizes: {} })
+    renderKid(store)
+    const button = await screen.findByRole('button', { name: /Vos/ })
+    expect(button.querySelector('[aria-hidden="true"]')?.textContent).toBe('🦊')
+  })
+
   it('gebruikt tabs met aria-selected', async () => {
     const store = await newStore()
     await add(store, 'top', 'Rood shirt')
