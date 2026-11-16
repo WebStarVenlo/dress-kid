@@ -7,6 +7,8 @@
  */
 import { openDB } from 'idb'
 import type { DBSchema, IDBPDatabase, IDBPTransaction, StoreNames } from 'idb'
+import { isAvatarId } from '../domain/avatars'
+import type { AvatarId } from '../domain/avatars'
 import { normalizeSize } from '../domain/sizes'
 import { CATEGORIES, DEFAULT_SETTINGS } from '../domain/types'
 import type {
@@ -271,9 +273,37 @@ function isStoredPin(value: unknown): value is StoredPin {
   )
 }
 
+/** `soundEnabled`: alleen een echte boolean telt; al het andere (ook ontbreken) wordt de standaard. */
+function cleanSoundEnabled(value: unknown): boolean {
+  return typeof value === 'boolean' ? value : DEFAULT_SETTINGS.soundEnabled
+}
+
 function normalizeSettings(value: unknown): Settings {
-  if (isRecord(value) && isCurrentSeason(value.currentSeason)) return { currentSeason: value.currentSeason }
-  return { ...DEFAULT_SETTINGS }
+  if (!isRecord(value)) return { ...DEFAULT_SETTINGS }
+  return {
+    currentSeason: isCurrentSeason(value.currentSeason) ? value.currentSeason : DEFAULT_SETTINGS.currentSeason,
+    soundEnabled: cleanSoundEnabled(value.soundEnabled),
+  }
+}
+
+/** Zet de avatar op een kopie van `base` als hij geldig is, of haalt hem weg. */
+function withAvatar<T extends object>(base: T, avatar: unknown): T & { avatar?: AvatarId } {
+  const result: T & { avatar?: AvatarId } = { ...base }
+  delete result.avatar
+  if (isAvatarId(avatar)) result.avatar = avatar
+  return result
+}
+
+/** Tijdstip van afronden: alleen een eindig, positief getal (epoch ms) is geldig. */
+function isCompletedAt(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
+/** Kopie van een opgeslagen outfit; `completedAt` alleen als hij gezet (en geldig) is. */
+function toSavedOutfit(saved: SavedOutfit): SavedOutfit {
+  const result: SavedOutfit = { childId: saved.childId, date: saved.date, outfit: normalizeOutfit(saved.outfit) }
+  if (isCompletedAt(saved.completedAt)) result.completedAt = saved.completedAt
+  return result
 }
 
 function normalizeOutfit(outfit: Outfit): Outfit {
@@ -347,16 +377,20 @@ function orInvalid<T>(fn: () => T, detail: string): T {
 function parseChild(value: unknown, index: number): Child {
   const label = `kind ${index + 1}`
   if (!isRecord(value)) throw invalid(`${label} is ongeldig`)
-  const { id, name, color, sizes, createdAt } = value
+  const { id, name, color, avatar, sizes, createdAt } = value
   if (typeof id !== 'string' || !id) throw invalid(`${label} heeft geen geldige id`)
   if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) throw invalid(`${label} heeft een ongeldige datum`)
-  return {
-    id,
-    name: orInvalid(() => cleanChildName(name), `${label} heeft een ongeldige naam`),
-    color: orInvalid(() => cleanColor(color), `${label} heeft een ongeldige kleur`),
-    sizes: orInvalid(() => cleanChildSizes(sizes ?? {}), `${label} heeft ongeldige maten`),
-    createdAt,
-  }
+  // Een onbekende avatar (bijv. uit een nieuwere app-versie) laten we stil vallen.
+  return withAvatar<Child>(
+    {
+      id,
+      name: orInvalid(() => cleanChildName(name), `${label} heeft een ongeldige naam`),
+      color: orInvalid(() => cleanColor(color), `${label} heeft een ongeldige kleur`),
+      sizes: orInvalid(() => cleanChildSizes(sizes ?? {}), `${label} heeft ongeldige maten`),
+      createdAt,
+    },
+    avatar,
+  )
 }
 
 const DATA_URL_RE = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/\s]*={0,2})$/i
@@ -437,8 +471,11 @@ function parseOutfits(
       // Verwijzingen naar onbekende of verkeerd ingedeelde kledingstukken laten we vallen.
       if (id !== undefined && itemsById.get(id)?.category === category) outfit[category] = id
     }
+    const saved: SavedOutfit = { childId: entry.childId, date: entry.date, outfit }
+    // Een ongeldig tijdstip van afronden laten we stil vallen (de outfit zelf blijft).
+    if (isCompletedAt(entry.completedAt)) saved.completedAt = entry.completedAt
     // JSON-sleutel, zodat geen enkele combinatie van childId en datum kan botsen.
-    byKey.set(JSON.stringify([entry.childId, entry.date]), { childId: entry.childId, date: entry.date, outfit })
+    byKey.set(JSON.stringify([entry.childId, entry.date]), saved)
   })
   return [...byKey.values()]
 }
@@ -474,7 +511,8 @@ function parseBackup(json: unknown): ParsedBackup {
     if (!isRecord(json.settings) || !isCurrentSeason(json.settings.currentSeason)) {
       throw invalid('de instellingen zijn ongeldig')
     }
-    settings = { currentSeason: json.settings.currentSeason }
+    // Oudere back-ups hebben geen `soundEnabled`; die (en een ongeldige waarde) wordt `true`.
+    settings = { currentSeason: json.settings.currentSeason, soundEnabled: cleanSoundEnabled(json.settings.soundEnabled) }
   }
 
   if (!Array.isArray(json.items)) throw invalid('de kledingstukken ontbreken')
@@ -675,7 +713,11 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
 
     async saveSettings(settings) {
       if (!isCurrentSeason(settings.currentSeason)) throw new Error('Onbekend seizoen.')
-      await (await db()).put('settings', { currentSeason: settings.currentSeason }, SETTINGS_KEY)
+      await (await db()).put(
+        'settings',
+        { currentSeason: settings.currentSeason, soundEnabled: cleanSoundEnabled(settings.soundEnabled) },
+        SETTINGS_KEY,
+      )
     },
 
     async listChildren() {
@@ -684,13 +726,16 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
     },
 
     async addChild(input: NewChild) {
-      const child: Child = {
-        id: newId(),
-        name: cleanChildName(input.name),
-        color: cleanColor(input.color),
-        sizes: cleanChildSizes(input.sizes ?? {}),
-        createdAt: nextCreatedAt(),
-      }
+      const child = withAvatar<Child>(
+        {
+          id: newId(),
+          name: cleanChildName(input.name),
+          color: cleanColor(input.color),
+          sizes: cleanChildSizes(input.sizes ?? {}),
+          createdAt: nextCreatedAt(),
+        },
+        input.avatar,
+      )
       await (await db()).add('children', child)
       return { ...child, sizes: copySizes(child.sizes) }
     },
@@ -700,17 +745,24 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
       const name = changes.name !== undefined ? cleanChildName(changes.name) : undefined
       const color = changes.color !== undefined ? cleanColor(changes.color) : undefined
       const sizes = changes.sizes !== undefined ? cleanChildSizes(changes.sizes) : undefined
+      // `avatar: undefined` (of null) wist de avatar; een onbekende waarde laat de bestaande staan.
+      const avatarValue: unknown = changes.avatar
+      const clearAvatar = 'avatar' in changes && (avatarValue === undefined || avatarValue === null)
+      const newAvatar = isAvatarId(avatarValue) ? avatarValue : undefined
       const tx = (await db()).transaction('children', 'readwrite')
       const updated = await runInTx(tx, async () => {
         const existing = await tx.store.get(id)
         if (!existing) throw new Error(CHILD_NOT_FOUND)
-        const next: Child = {
-          id: existing.id,
-          name: name ?? existing.name,
-          color: color ?? existing.color,
-          sizes: sizes ?? existing.sizes,
-          createdAt: existing.createdAt,
-        }
+        const next = withAvatar<Child>(
+          {
+            id: existing.id,
+            name: name ?? existing.name,
+            color: color ?? existing.color,
+            sizes: sizes ?? existing.sizes,
+            createdAt: existing.createdAt,
+          },
+          clearAvatar ? undefined : (newAvatar ?? existing.avatar),
+        )
         await tx.store.put(next)
         return next
       })
@@ -731,15 +783,41 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
 
     async getOutfit(childId, date) {
       const saved = await (await db()).get('outfits', [childId, date])
-      return saved ? { childId: saved.childId, date: saved.date, outfit: normalizeOutfit(saved.outfit) } : undefined
+      return saved ? toSavedOutfit(saved) : undefined
     },
 
     async saveOutfit(childId, date, outfit) {
       const tx = (await db()).transaction(['children', 'outfits'], 'readwrite')
       await runInTx(tx, async () => {
         if (!(await tx.objectStore('children').get(childId))) throw new Error(CHILD_NOT_FOUND)
-        await tx.objectStore('outfits').put({ childId, date, outfit: normalizeOutfit(outfit) })
+        const outfits = tx.objectStore('outfits')
+        const existing = await outfits.get([childId, date])
+        const next: SavedOutfit = { childId, date, outfit: normalizeOutfit(outfit) }
+        // Een eenmaal verdiende sticker blijft staan, ook als de outfit daarna nog wijzigt.
+        if (isCompletedAt(existing?.completedAt)) next.completedAt = existing.completedAt
+        await outfits.put(next)
       })
+    },
+
+    async markOutfitCompleted(childId, date) {
+      const tx = (await db()).transaction(['children', 'outfits'], 'readwrite')
+      await runInTx(tx, async () => {
+        if (!(await tx.objectStore('children').get(childId))) throw new Error(CHILD_NOT_FOUND)
+        const outfits = tx.objectStore('outfits')
+        const existing = await outfits.get([childId, date])
+        if (isCompletedAt(existing?.completedAt)) return
+        await outfits.put({
+          childId,
+          date,
+          outfit: existing ? normalizeOutfit(existing.outfit) : {},
+          completedAt: Date.now(),
+        })
+      })
+    },
+
+    async countCompletedDays(childId) {
+      const outfits = await (await db()).getAllFromIndex('outfits', 'childId', childId)
+      return outfits.filter((saved) => isCompletedAt(saved.completedAt)).length
     },
 
     async getParentPin() {
@@ -773,13 +851,18 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
         settings: normalizeSettings(settings),
         children: children
           .sort((a, b) => a.createdAt - b.createdAt)
-          .map((child) => ({
-            id: child.id,
-            name: child.name,
-            color: child.color,
-            sizes: copySizes(child.sizes),
-            createdAt: child.createdAt,
-          })),
+          .map((child) =>
+            withAvatar<Child>(
+              {
+                id: child.id,
+                name: child.name,
+                color: child.color,
+                sizes: copySizes(child.sizes),
+                createdAt: child.createdAt,
+              },
+              child.avatar,
+            ),
+          ),
         items: items
           .sort((a, b) => a.createdAt - b.createdAt)
           .map((item) =>
@@ -799,11 +882,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
               item.size,
             ),
           ),
-        outfits: outfits.map((saved) => ({
-          childId: saved.childId,
-          date: saved.date,
-          outfit: normalizeOutfit(saved.outfit),
-        })),
+        outfits: outfits.map(toSavedOutfit),
       }
       return new Blob([JSON.stringify(backup)], { type: 'application/json' })
     },
