@@ -35,7 +35,9 @@ function StorageStatus({ info }: { info: StorageInfo }) {
 
 async function saveBackupFile(blob: Blob, filename: string): Promise<'shared' | 'cancelled' | 'download'> {
   const file = new File([blob], filename, { type: 'application/json' })
-  if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
+  // Alleen delen op apparaten met een touchscreen als primaire aanwijzer; op desktop is downloaden gewoner.
+  const touchPrimary = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+  if (touchPrimary && typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: 'Dress Kid back-up' })
       return 'shared'

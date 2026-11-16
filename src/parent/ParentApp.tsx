@@ -159,7 +159,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
     <main className="page parent">
       <header className="parent-header">
         <h1>Ouderbeheer</h1>
-        <Link className="parent-link" to="/" onClick={lock}>
+        <Link className="parent-link" to="/">
           Naar de kledingkast van je kind →
         </Link>
       </header>

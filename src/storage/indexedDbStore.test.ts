@@ -116,6 +116,14 @@ describe('createIndexedDbStore: kledingstukken', () => {
   })
 })
 
+describe('createIndexedDbStore: namen', () => {
+  it('knipt een lange naam op codepoints, zonder een surrogaatpaar te splitsen', async () => {
+    const store = freshStore()
+    const item = await store.addItem(newItem({ name: `${'a'.repeat(59)}😀extra` }))
+    expect(item.name).toBe(`${'a'.repeat(59)}😀`)
+  })
+})
+
 describe('createIndexedDbStore: uitsluitingen', () => {
   it('setExcluded werkt aan beide kanten en is idempotent', async () => {
     const store = freshStore()

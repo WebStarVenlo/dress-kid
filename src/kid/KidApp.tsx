@@ -109,13 +109,19 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
     }
   }, [loading, error, items, settings, activeStore, day])
 
+  // Is het inmiddels een nieuwe dag? Zo ja, begin opnieuw met een lege outfit en meld dat terug.
+  const rollOverIfNeeded = useCallback((): boolean => {
+    const now = todayKey()
+    if (now === day) return false
+    setOutfitReady(false)
+    setDay(now)
+    return true
+  }, [day])
+
   // Blijft de app overnacht open, dan beginnen we de nieuwe dag met een lege outfit.
   useEffect(() => {
     const check = () => {
-      const now = todayKey()
-      if (now === day) return
-      setOutfitReady(false)
-      setDay(now)
+      rollOverIfNeeded()
     }
     const onVisibility = () => {
       if (document.visibilityState === 'visible') check()
@@ -128,7 +134,7 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
       window.removeEventListener('focus', check)
       window.clearInterval(timer)
     }
-  }, [day])
+  }, [rollOverIfNeeded])
 
   // De ongedaan-maken-knop verdwijnt na een paar seconden.
   useEffect(() => {
@@ -173,6 +179,8 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
   }
 
   function handleChoose(item: ClothingItem) {
+    // Een tik na middernacht rolt eerst de dag om, en wordt niet onder de oude dag bewaard.
+    if (rollOverIfNeeded()) return
     const wasChosen = outfit[item.category] === item.id
     setUndoOutfit(undefined)
     const next = chooseItem(items, settings, outfit, item)
@@ -184,6 +192,7 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
   }
 
   function restart() {
+    if (rollOverIfNeeded()) return
     setUndoOutfit(outfit)
     update({})
     setScreen('choose')

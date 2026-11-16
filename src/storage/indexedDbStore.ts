@@ -144,7 +144,8 @@ function photoToDataUrl(photo: StoredPhoto): string {
 }
 
 function cleanName(name: string | undefined): string | undefined {
-  const trimmed = name?.trim().slice(0, MAX_NAME_LENGTH).trim()
+  // Op codepoints knippen, zodat een surrogaatpaar (emoji) niet doormidden gaat.
+  const trimmed = name === undefined ? undefined : Array.from(name.trim()).slice(0, MAX_NAME_LENGTH).join('').trim()
   return trimmed ? trimmed : undefined
 }
 

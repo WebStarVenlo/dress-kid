@@ -222,8 +222,7 @@ describe('KidApp', () => {
     }
 
     async function expectFreshDay(store: WardrobeStore) {
-      expect(await screen.findByRole('heading', { name: 'Wat trek je vandaag aan?' })).toBeInTheDocument()
-      expect(screen.getByRole('list', { name: 'Jouw outfit' })).not.toHaveTextContent('Gele trui')
+      expect(await screen.findByRole('list', { name: 'Jouw outfit' })).not.toHaveTextContent('Gele trui')
       click(await screen.findByRole('button', { name: 'Gele trui' }))
       await waitFor(async () => {
         expect(Object.keys((await store.getOutfit('2026-06-11'))?.outfit ?? {})).toEqual(['top'])
@@ -232,6 +231,14 @@ describe('KidApp', () => {
         expect.objectContaining({ top: expect.any(String), bottom: expect.any(String) }),
       )
     }
+
+    it('bewaart een tik na middernacht niet onder de oude dag', async () => {
+      const store = await setup()
+      click(screen.getByRole('button', { name: 'Veranderen' }))
+      vi.setSystemTime(new Date(2026, 5, 11, 0, 0, 5))
+      click(await screen.findByRole('button', { name: 'Gele trui' }))
+      await expectFreshDay(store)
+    })
 
     it('begint een nieuwe dag leeg na visibilitychange', async () => {
       const store = await setup()

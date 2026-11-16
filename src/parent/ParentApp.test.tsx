@@ -92,6 +92,14 @@ describe('ouderslot', () => {
     await waitFor(() => expect(sessionStorage.getItem(UNLOCK_KEY)).toBeNull())
   })
 
+  it('vergrendelt niet bij een gewijzigde klik (nieuw tabblad) op de link', async () => {
+    renderParent()
+    await unlock()
+    fireEvent.click(screen.getByRole('link', { name: /Naar de kledingkast van je kind/ }), { ctrlKey: true })
+    expect(screen.getByRole('button', { name: 'Kleding toevoegen' })).toBeInTheDocument()
+    expect(Number(sessionStorage.getItem(UNLOCK_KEY))).toBeGreaterThan(0)
+  })
+
   it('vergrendelt weer als de route wordt verlaten, maar niet in StrictMode-remount', async () => {
     const { unmount } = render(
       <StrictMode>
@@ -322,7 +330,17 @@ describe('instellingen en back-up', () => {
     expect(screen.queryByText(/beschermd|opruimen als/)).not.toBeInTheDocument()
   })
 
-  it('deelt de back-up via het deelmenu als dat bestanden ondersteunt', async () => {
+  function stubPointer(coarse: boolean) {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: coarse && query === '(pointer: coarse)',
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }))
+  }
+
+  it('deelt de back-up via het deelmenu op een apparaat met touch als dat bestanden ondersteunt', async () => {
+    stubPointer(true)
     const share = vi.fn().mockResolvedValue(undefined)
     const canShare = vi.fn().mockReturnValue(true)
     vi.stubGlobal('navigator', { ...navigator, share, canShare })
@@ -336,7 +354,20 @@ describe('instellingen en back-up', () => {
     expect(click).not.toHaveBeenCalled()
   })
 
+  it('downloadt op desktop ook als de browser bestanden kan delen', async () => {
+    stubPointer(false)
+    const share = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { ...navigator, share, canShare: () => true })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    await openBackup()
+    fireEvent.click(screen.getByRole('button', { name: 'Back-up maken' }))
+    expect(await screen.findByText(/De back-up is gemaakt/)).toBeInTheDocument()
+    expect(share).not.toHaveBeenCalled()
+    expect(click).toHaveBeenCalledTimes(1)
+  })
+
   it('meldt niets als de gebruiker het deelmenu annuleert', async () => {
+    stubPointer(true)
     const share = vi.fn().mockRejectedValue(new DOMException('geannuleerd', 'AbortError'))
     vi.stubGlobal('navigator', { ...navigator, share, canShare: () => true })
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
@@ -358,6 +389,7 @@ describe('instellingen en back-up', () => {
     expect(click).toHaveBeenCalledTimes(1)
 
     // share() gooit een andere fout
+    stubPointer(true)
     const share = vi.fn().mockRejectedValue(new Error('niet toegestaan'))
     vi.stubGlobal('navigator', { ...navigator, share, canShare: () => true })
     fireEvent.click(screen.getByRole('button', { name: 'Back-up maken' }))
