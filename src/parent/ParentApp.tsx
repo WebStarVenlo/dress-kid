@@ -186,7 +186,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
           [
             ['wardrobe', 'Kast'],
             ['children', 'Kinderen'],
-            ['settings', 'Seizoen'],
+            ['settings', 'Instellingen'],
             ['backup', 'Back-up'],
           ] as const
         ).map(([name, label]) => (

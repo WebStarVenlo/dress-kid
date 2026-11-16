@@ -274,7 +274,7 @@ describe('instellingen en back-up', () => {
   it('slaat het seizoen op', async () => {
     renderParent()
     await unlock()
-    fireEvent.click(screen.getByRole('button', { name: 'Seizoen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Instellingen' }))
     fireEvent.click(await screen.findByRole('radio', { name: 'Winter' }))
     await waitFor(async () => expect((await store.getSettings()).currentSeason).toBe('winter'))
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Winter' })).toHaveAttribute('aria-checked', 'true'))
