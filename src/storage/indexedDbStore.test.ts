@@ -366,3 +366,117 @@ describe('createIndexedDbStore: back-up', () => {
     await expect(store.importBackup(jsonBlob(validBackup({ version: 2 })))).rejects.toThrow(/nieuwere versie/)
   })
 })
+
+describe('createIndexedDbStore: foto-cache', () => {
+  it('geeft dezelfde Blob terug zolang de foto niet verandert', async () => {
+    const store = freshStore()
+    const a = await store.addItem(newItem({ name: 'A' }))
+    await store.addItem(newItem({ name: 'B' }))
+    const first = await store.listItems()
+    const second = await store.listItems()
+    expect(second[0]!.photo).toBe(first[0]!.photo)
+    expect(second[1]!.photo).toBe(first[1]!.photo)
+    expect((await store.getItem(a.id))!.photo).toBe(first[0]!.photo)
+    // Andere wijzigingen houden de Blob vast.
+    await store.updateItem(a.id, { name: 'Nieuw', available: false })
+    await store.setExcluded(a.id, first[1]!.id, true)
+    expect((await store.listItems())[0]!.photo).toBe(first[0]!.photo)
+  })
+
+  it('geeft een nieuwe Blob na het vervangen van de foto', async () => {
+    const store = freshStore()
+    const a = await store.addItem(newItem())
+    const before = (await store.listItems())[0]!.photo
+    // Zelfde grootte en type: moet toch als nieuwe foto herkend worden.
+    const updated = await store.updateItem(a.id, { photo: photo([9, 9, 9, 9]) })
+    const after = (await store.listItems())[0]!.photo
+    expect(after).not.toBe(before)
+    expect(after).toBe(updated.photo)
+    expect(await bytesOf(after)).toEqual([9, 9, 9, 9])
+  })
+
+  it('geeft geen interne velden mee', async () => {
+    const store = freshStore()
+    const a = await store.addItem(newItem())
+    expect(a).not.toHaveProperty('photoRev')
+    expect((await store.listItems())[0]).not.toHaveProperty('photoRev')
+  })
+
+  it('maakt de cache leeg bij importeren', async () => {
+    const store = freshStore()
+    await store.addItem(newItem())
+    const before = (await store.listItems())[0]!.photo
+    await store.importBackup(jsonBlob(validBackup({ items: [{ ...(validBackup().items as object[])[0]!, id: 'x' }] })))
+    const imported = (await store.listItems())[0]!
+    expect(imported.photo).not.toBe(before)
+    expect(await bytesOf(imported.photo)).toEqual([1, 2, 3])
+    // Zelfde id opnieuw importeren met andere foto: nieuwe Blob.
+    await store.importBackup(
+      jsonBlob(validBackup({ items: [{ ...(validBackup().items as object[])[0]!, id: 'x', photo: 'data:image/png;base64,BAUG' }] })),
+    )
+    const again = (await store.listItems())[0]!
+    expect(again.photo).not.toBe(imported.photo)
+    expect(await bytesOf(again.photo)).toEqual([4, 5, 6])
+  })
+
+  it('werkt met oudere records zonder photoRev', async () => {
+    const name = `dress-kid-legacy-${Math.random().toString(36).slice(2)}`
+    const { openDB } = await import('idb')
+    const raw = await openDB(name, 1, {
+      upgrade(database) {
+        database.createObjectStore('items', { keyPath: 'id' })
+        database.createObjectStore('settings')
+        database.createObjectStore('outfits', { keyPath: 'date' })
+      },
+    })
+    await raw.put('items', {
+      id: 'oud',
+      category: 'top',
+      season: 'all',
+      available: true,
+      excludedIds: [],
+      createdAt: 1,
+      photo: { type: 'image/jpeg', data: new Uint8Array([7, 8]).buffer },
+    })
+    raw.close()
+    const store = createIndexedDbStore(name)
+    const first = await store.listItems()
+    expect(await bytesOf(first[0]!.photo)).toEqual([7, 8])
+    expect((await store.listItems())[0]!.photo).toBe(first[0]!.photo)
+  })
+})
+
+describe('createIndexedDbStore: import-grenzen', () => {
+  it('weigert een te groot bestand meteen', async () => {
+    const store = freshStore()
+    const big = new Blob(['{}'])
+    Object.defineProperty(big, 'size', { value: 201 * 1024 * 1024 })
+    const text = vi.spyOn(big, 'text')
+    await expect(store.importBackup(big)).rejects.toThrow(/te groot/)
+    expect(text).not.toHaveBeenCalled()
+  })
+
+  it('kapt te lange namen af op 60 tekens', async () => {
+    const store = freshStore()
+    const item = { ...(validBackup().items as object[])[0]!, name: 'x'.repeat(100) }
+    await store.importBackup(jsonBlob(validBackup({ items: [item] })))
+    expect((await store.listItems())[0]!.name).toBe('x'.repeat(60))
+  })
+
+  it('weigert een foto groter dan 10 MB en laat bestaande data staan', async () => {
+    const store = freshStore()
+    await store.addItem(newItem({ name: 'Blijft' }))
+    const huge = `data:image/png;base64,${'A'.repeat(Math.ceil(((10 * 1024 * 1024 + 10) * 4) / 3 / 4) * 4)}`
+    const item = { ...(validBackup().items as object[])[0]!, photo: huge }
+    await expect(store.importBackup(jsonBlob(validBackup({ items: [item] })))).rejects.toThrow(/te grote foto/)
+    expect((await store.listItems()).map((i) => i.name)).toEqual(['Blijft'])
+  })
+
+  it('accepteert een foto net onder de grens', async () => {
+    const store = freshStore()
+    const ok = `data:image/png;base64,${'A'.repeat(Math.floor((9 * 1024 * 1024) / 3) * 4)}`
+    const item = { ...(validBackup().items as object[])[0]!, photo: ok }
+    await store.importBackup(jsonBlob(validBackup({ items: [item] })))
+    expect((await store.listItems())[0]!.photo.size).toBe(Math.floor((9 * 1024 * 1024) / 3) * 3)
+  })
+})

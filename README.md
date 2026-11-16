@@ -2,24 +2,23 @@
 
 Dress Kid is een kleine webapp waarmee kinderen (vanaf ongeveer 4 jaar) zelf hun outfit voor de dag kiezen. Ouders vullen een virtuele kleerkast met foto's van de kleding van hun kind. Het kind kiest daarna uit wat er beschikbaar is.
 
-Status: de app is in ontwikkeling. De basisstructuur staat er; de schermen en functies worden stap voor stap gebouwd.
-
 ## Functies
 
-- **Kinderomgeving** (`/#/`): het kind kiest per categorie (shirt, broek, jurk, trui, sokken, schoenen, jas, extraatje) een kledingstuk uit de kast.
-- **Ouderomgeving** (`/#/ouder`): beheer van de kast, achter een eenvoudige ouderpoort.
-- **Foto's**: van elk kledingstuk wordt een verkleinde foto opgeslagen.
+- **Kinderomgeving** (`/#/`): het kind kiest per categorie (shirt, broek of rok, jurk, trui of vest, sokken, schoenen, jas, extraatje) een kledingstuk uit de kast. Een jurk kan niet samen met shirt en broek gekozen worden. De gekozen outfit wordt per dag onthouden; "Opnieuw beginnen" kan met een knop ongedaan gemaakt worden.
+- **Ouderomgeving** (`/#/ouder`): beheer van de kast, achter een eenvoudig ouderslot (een vermenigvuldigsom).
+- **Toevoegen**: kleding toevoegen met de camera of uit de galerij, ook meerdere foto's tegelijk. Van elk kledingstuk wordt een verkleinde foto (JPEG, maximaal 800 px) opgeslagen. Achteraf kun je de foto, naam, soort en seizoen aanpassen of het kledingstuk verwijderen.
 - **Past niet bij**: je kunt aangeven welke kledingstukken niet samen gedragen worden. Dit geldt in beide richtingen.
 - **Seizoen**: kleding is gemarkeerd als zomer, winter of altijd. Het seizoen dat de ouder instelt, bepaalt wat het kind ziet.
 - **In de was**: een kledingstuk kan tijdelijk op niet-beschikbaar worden gezet, zonder het te verwijderen.
-- **Back-up**: de hele kast (inclusief foto's) kan geëxporteerd en weer geïmporteerd worden als één bestand.
+- **Back-up**: de hele kast (inclusief foto's) kan geëxporteerd en weer geïmporteerd worden als één JSON-bestand. Op apparaten die dat ondersteunen verschijnt het deelmenu (handig op iPhone en iPad), anders wordt het bestand gedownload. Het terugzetten weigert bestanden groter dan 200 MB en foto's groter dan 10 MB.
 - **Offline en installeerbaar**: als PWA werkt de app zonder internet en kan hij op het startscherm van telefoon of tablet worden gezet.
 
-## Privacy
+## Privacy en bewaren van gegevens
 
-Alle gegevens blijven op het apparaat. De app heeft geen server en stuurt niets naar het internet. De kast staat in de opslag van de browser (IndexedDB).
-
-Let op: als je de browsergegevens van de site wist, is de kast weg. Maak daarom regelmatig een back-up via de ouderomgeving.
+- Alle gegevens blijven op het apparaat. De app heeft geen server en stuurt niets naar het internet. De kast staat in de opslag van de browser (IndexedDB). Elk apparaat heeft dus zijn eigen kast: er is geen synchronisatie. Wil je dezelfde kast op een tweede apparaat, gebruik dan een back-up.
+- De browser mag opgeslagen gegevens van een site opruimen als het apparaat vol raakt, tenzij de site "persistente opslag" heeft. De app vraagt hier bij het openen van de ouderomgeving en na het toevoegen van kleding om, maar de browser beslist. Zet de app daarom op het beginscherm (dat vergroot de kans op bescherming, vooral op iOS) en maak regelmatig een back-up. In het tabblad Back-up zie je of de opslag beschermd is en hoeveel ruimte de kast ongeveer gebruikt.
+- Wis je de browsergegevens van de site, of raak je het apparaat kwijt, dan is de kast weg als er geen back-up is.
+- Het ouderslot is **geen echte beveiliging**. Het houdt alleen een jong kind uit de beheeromgeving; wie kan rekenen of de code leest, komt er gewoon in. Het slot gaat weer dicht zodra je via de link terug naar de kinderomgeving gaat of de ouderpagina verlaat, en na 5 minuten zonder activiteit of met een verborgen pagina. Opnieuw laden binnen die tijd houdt de ouderomgeving open.
 
 ## Lokaal ontwikkelen
 
@@ -41,11 +40,11 @@ De camera en het installeren als app werken alleen in een beveiligde context: HT
 
 ```
 src/
-├── domain/   gedeelde domeintypes (kledingstuk, categorie, seizoen, outfit, instellingen)
-├── storage/  opslaglaag (contract WardrobeStore, IndexedDB, back-up export/import)
+├── domain/   domeintypes en pure logica (compat: wat past bij elkaar, outfit-regels; image: foto's verkleinen)
+├── storage/  opslaglaag (contract WardrobeStore, IndexedDB, back-up export/import, persistente opslag)
 ├── kid/      kinderomgeving (route /)
-├── parent/   ouderomgeving (route /ouder)
-├── shared/   gedeelde componenten en hulpfuncties (nog niet aangemaakt)
+├── parent/   ouderomgeving (route /ouder): kast, toevoegen, kledingstuk, seizoen, back-up, ouderslot
+├── shared/   gedeelde React-hooks (useWardrobe, usePhotoUrl)
 ├── styles/   globale stijlen
 └── test/     testconfiguratie
 ```
@@ -119,10 +118,10 @@ az storage blob upload-batch --account-name "$ACCOUNT" --auth-mode login \
   -d '$web' -s dist --overwrite
 ```
 
-Let op: `index.html`, `sw.js` en `manifest.webmanifest` moeten niet gecachet worden, zodat updates van de app direct aankomen. De deploy-workflow zet dat automatisch. Handmatig kun je het zo doen:
+Let op: `index.html`, `sw.js`, `registerSW.js` en `manifest.webmanifest` moeten niet gecachet worden, zodat updates van de app direct aankomen. De deploy-workflow uploadt eerst alle andere bestanden en daarna deze vier (met `no-cache`, `index.html` als laatste). Handmatig kun je ze zo een `no-cache`-header geven:
 
 ```bash
-for f in index.html sw.js manifest.webmanifest; do
+for f in index.html sw.js registerSW.js manifest.webmanifest; do
   az storage blob update --account-name "$ACCOUNT" --auth-mode login \
     --container-name '$web' --name "$f" --content-cache-control "no-cache"
 done

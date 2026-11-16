@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useWardrobe } from '../shared/hooks'
-import { getStore } from '../storage'
+import { getStore, requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
 import AddFlow from './AddFlow'
 import BackupPanel from './BackupPanel'
@@ -10,24 +10,63 @@ import type { Sum } from './Gate'
 import ItemDetail from './ItemDetail'
 import SettingsPanel from './SettingsPanel'
 import Wardrobe from './Wardrobe'
+import { isUnlocked, lock, touchUnlock } from './unlock'
 import './parent.css'
 
-const UNLOCK_KEY = 'dress-kid-parent-unlocked'
+/** Hoe vaak we controleren of het slot is verlopen terwijl de pagina open staat. */
+const CHECK_INTERVAL_MS = 15_000
+/** Activiteit verlengt de geldigheid hooguit zo vaak (voorkomt schrijven bij elke beweging). */
+const TOUCH_THROTTLE_MS = 5_000
 
-function readUnlocked(): boolean {
-  try {
-    return sessionStorage.getItem(UNLOCK_KEY) === '1'
-  } catch {
-    return false
-  }
-}
+/**
+ * Uitstel voor het opnieuw vergrendelen bij unmount. React StrictMode (dev) voert effecten uit als
+ * mount → cleanup → mount; de tweede mount annuleert het uitgestelde vergrendelen.
+ */
+let pendingLock: ReturnType<typeof setTimeout> | undefined
 
-function writeUnlocked(): void {
-  try {
-    sessionStorage.setItem(UNLOCK_KEY, '1')
-  } catch {
-    // Zonder sessionStorage moet de ouder opnieuw de som maken; geen probleem.
-  }
+function useAutoLock(active: boolean, onExpire: () => void): void {
+  useEffect(() => {
+    if (!active) return undefined
+    if (pendingLock !== undefined) {
+      clearTimeout(pendingLock)
+      pendingLock = undefined
+    }
+    touchUnlock()
+    let lastTouch = Date.now()
+
+    const expireIfNeeded = () => {
+      if (!isUnlocked()) onExpire()
+    }
+    const onActivity = () => {
+      const now = Date.now()
+      if (!isUnlocked(now)) {
+        onExpire()
+        return
+      }
+      if (now - lastTouch >= TOUCH_THROTTLE_MS) {
+        lastTouch = now
+        touchUnlock(now)
+      }
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') expireIfNeeded()
+    }
+    const events = ['pointerdown', 'keydown', 'input'] as const
+    for (const name of events) document.addEventListener(name, onActivity, true)
+    document.addEventListener('visibilitychange', onVisibility)
+    const timer = setInterval(expireIfNeeded, CHECK_INTERVAL_MS)
+
+    return () => {
+      for (const name of events) document.removeEventListener(name, onActivity, true)
+      document.removeEventListener('visibilitychange', onVisibility)
+      clearInterval(timer)
+      // Het ouderscherm verdwijnt (terug naar kind, andere route): vergrendel, tenzij direct opnieuw gemount.
+      pendingLock = setTimeout(() => {
+        pendingLock = undefined
+        lock()
+      }, 0)
+    }
+  }, [active, onExpire])
 }
 
 export interface ParentAppProps {
@@ -40,15 +79,20 @@ export interface ParentAppProps {
 type View = { name: 'wardrobe' } | { name: 'add' } | { name: 'item'; id: string } | { name: 'settings' } | { name: 'backup' }
 
 export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps) {
-  const [unlocked, setUnlocked] = useState(readUnlocked)
+  const [unlocked, setUnlocked] = useState(() => isUnlocked())
   const [sum] = useState(makeSum)
+  const [expire] = useState(() => () => {
+    lock()
+    setUnlocked(false)
+  })
+  useAutoLock(unlocked, expire)
 
   if (!unlocked) {
     return (
       <Gate
         sum={sum}
         onUnlock={() => {
-          writeUnlocked()
+          touchUnlock()
           setUnlocked(true)
         }}
       />
@@ -60,6 +104,11 @@ export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps
 function ParentMain({ store }: { store: WardrobeStore }) {
   const { items, settings, loading, error, reload } = useWardrobe(store)
   const [view, setView] = useState<View>({ name: 'wardrobe' })
+
+  // Vraag de browser de kledingkast te beschermen tegen automatisch opruimen.
+  useEffect(() => {
+    void requestPersistentStorage()
+  }, [])
 
   const open = view.name === 'item' ? items.find((item) => item.id === view.id) : undefined
   const tab = view.name === 'settings' || view.name === 'backup' ? view.name : 'wardrobe'
@@ -110,7 +159,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
     <main className="page parent">
       <header className="parent-header">
         <h1>Ouderbeheer</h1>
-        <Link className="parent-link" to="/">
+        <Link className="parent-link" to="/" onClick={lock}>
           Naar de kledingkast van je kind →
         </Link>
       </header>

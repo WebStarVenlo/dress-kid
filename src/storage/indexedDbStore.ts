@@ -25,6 +25,10 @@ const SETTINGS_KEY = 'settings'
 const BACKUP_APP = 'dress-kid'
 const BACKUP_VERSION = 1
 const INVALID_BACKUP = 'Dit is geen geldig Dress Kid back-upbestand.'
+/** Grenzen voor het importeren van een back-up (bescherming tegen per ongeluk gekozen grote bestanden). */
+const MAX_BACKUP_BYTES = 200 * 1024 * 1024
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024
+const MAX_NAME_LENGTH = 60
 
 /** Afbeeldingstypes die we uit een back-up accepteren (bewust geen SVG: kan scripts bevatten). */
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -46,6 +50,11 @@ interface StoredPhoto {
 
 interface StoredItem extends Omit<ClothingItem, 'photo'> {
   photo: StoredPhoto
+  /**
+   * Uniek label voor de huidige foto; verandert bij elke nieuwe foto. Oudere records hebben dit
+   * veld niet; dan wordt een label afgeleid van type en grootte (zie `photoKey`).
+   */
+  photoRev?: string
 }
 
 interface DressKidDB extends DBSchema {
@@ -110,8 +119,8 @@ function fromStoredPhoto(photo: StoredPhoto): Blob {
   return new Blob([new Uint8Array(photo.data)], { type: photo.type })
 }
 
-function toItem(stored: StoredItem): ClothingItem {
-  return { ...stored, excludedIds: [...stored.excludedIds], photo: fromStoredPhoto(stored.photo) }
+function photoKey(stored: StoredItem): string {
+  return stored.photoRev ?? `legacy:${stored.photo.type}:${stored.photo.data.byteLength}`
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -135,7 +144,7 @@ function photoToDataUrl(photo: StoredPhoto): string {
 }
 
 function cleanName(name: string | undefined): string | undefined {
-  const trimmed = name?.trim()
+  const trimmed = name?.trim().slice(0, MAX_NAME_LENGTH).trim()
   return trimmed ? trimmed : undefined
 }
 
@@ -227,6 +236,9 @@ function parsePhoto(value: unknown, label: string): StoredPhoto {
   if (!type || base64 === undefined || !ALLOWED_IMAGE_TYPES.has(type)) {
     throw invalid(`${label} heeft een ongeldige foto`)
   }
+  if (base64.length * 0.75 > MAX_PHOTO_BYTES + 3) {
+    throw invalid(`${label} heeft een te grote foto (maximaal 10 MB)`)
+  }
   let bytes: Uint8Array<ArrayBuffer>
   try {
     bytes = base64ToBytes(base64)
@@ -234,6 +246,7 @@ function parsePhoto(value: unknown, label: string): StoredPhoto {
     throw invalid(`${label} heeft een beschadigde foto`)
   }
   if (bytes.length === 0) throw invalid(`${label} heeft een lege foto`)
+  if (bytes.length > MAX_PHOTO_BYTES) throw invalid(`${label} heeft een te grote foto (maximaal 10 MB)`)
   return { type, data: bytes.buffer }
 }
 
@@ -258,6 +271,7 @@ function parseItem(value: unknown, index: number): StoredItem {
     excludedIds: excludedIds as string[],
     createdAt,
     photo: parsePhoto(photo, label),
+    photoRev: newId(),
   }
   return withName(base, typeof name === 'string' ? name : undefined)
 }
@@ -331,6 +345,23 @@ function parseBackup(json: unknown): ParsedBackup {
 export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
   let dbPromise: Promise<IDBPDatabase<DressKidDB>> | undefined
   let lastCreatedAt = 0
+  /**
+   * Blobs per kledingstuk, zodat opeenvolgende reads dezelfde Blob-instantie teruggeven zolang de
+   * foto niet veranderd is (anders maakt `usePhotoUrl` telkens nieuwe object-URL's).
+   */
+  const blobCache = new Map<string, { key: string; blob: Blob }>()
+
+  function toItem(stored: StoredItem): ClothingItem {
+    const key = photoKey(stored)
+    let cached = blobCache.get(stored.id)
+    if (cached?.key !== key) {
+      cached = { key, blob: fromStoredPhoto(stored.photo) }
+      blobCache.set(stored.id, cached)
+    }
+    const { photoRev: _rev, ...rest } = stored
+    void _rev
+    return { ...rest, excludedIds: [...stored.excludedIds], photo: cached.blob }
+  }
 
   function db(): Promise<IDBPDatabase<DressKidDB>> {
     if (!dbPromise) {
@@ -366,6 +397,8 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
   const store: WardrobeStore = {
     async listItems() {
       const items = await (await db()).getAll('items')
+      const live = new Set(items.map((item) => item.id))
+      for (const id of blobCache.keys()) if (!live.has(id)) blobCache.delete(id)
       return items.sort((a, b) => a.createdAt - b.createdAt).map(toItem)
     },
 
@@ -387,6 +420,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
           excludedIds: [],
           createdAt: nextCreatedAt(),
           photo,
+          photoRev: newId(),
         },
         input.name,
       )
@@ -407,14 +441,18 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
         if (changes.category !== undefined) updated.category = changes.category
         if (changes.season !== undefined) updated.season = changes.season
         if (changes.available !== undefined) updated.available = Boolean(changes.available)
-        if (photo) updated.photo = photo
+        if (photo) {
+          updated.photo = photo
+          updated.photoRev = newId()
+        }
         if ('name' in changes) updated = withName(updated, changes.name)
         await tx.store.put(updated)
-        return toItem(updated)
-      })
+        return updated
+      }).then(toItem)
     },
 
     async deleteItem(id) {
+      blobCache.delete(id)
       const tx = (await db()).transaction(['items', 'outfits'], 'readwrite')
       await runInTx(tx, async () => {
         const items = tx.objectStore('items')
@@ -508,6 +546,9 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
 
     async importBackup(file) {
       // Alles lezen en controleren vóór de schrijftransactie; bij een fout blijft alles onveranderd.
+      if (file.size > MAX_BACKUP_BYTES) {
+        throw new Error('Dit bestand is te groot om een back-up te zijn (meer dan 200 MB).')
+      }
       let text: string
       try {
         text = await blobToText(file)
@@ -534,6 +575,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
           ...parsed.outfits.map((saved) => outfits.put(saved)),
         ])
       })
+      blobCache.clear()
       lastCreatedAt = parsed.items.reduce((max, item) => Math.max(max, item.createdAt), lastCreatedAt)
     },
   }

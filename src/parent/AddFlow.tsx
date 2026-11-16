@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
 import type { Category, ItemSeason } from '../domain/types'
 import { resizePhoto } from '../domain/image'
+import { requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
 import { ChoiceGroup, Thumb, errorMessage } from './shared'
 
@@ -44,10 +45,15 @@ export default function AddFlow({ store, reload, onDone }: AddFlowProps) {
     setErrors([])
     setProgress({ done: 0, total: files.length })
     const failures: string[] = []
+    let requestedPersist = false
     for (const [index, file] of files.entries()) {
       try {
         const photo = await resizePhoto(file)
         const item = await store.addItem({ category, season, photo })
+        if (!requestedPersist) {
+          requestedPersist = true
+          void requestPersistentStorage()
+        }
         setAdded((prev) => [{ id: item.id, category, photo: item.photo }, ...prev])
       } catch (error) {
         console.error(error)

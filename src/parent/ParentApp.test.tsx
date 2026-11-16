@@ -1,10 +1,12 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Category, ClothingItem } from '../domain/types'
 import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 import ParentApp from './ParentApp'
+import { UNLOCK_KEY, UNLOCK_TTL_MS } from './unlock'
 
 vi.mock('../domain/image', () => ({
   resizePhoto: vi.fn(async (file: Blob) => {
@@ -46,6 +48,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('ouderslot', () => {
@@ -60,13 +63,103 @@ describe('ouderslot', () => {
     expect(screen.queryByRole('button', { name: /Kleding toevoegen/ })).not.toBeInTheDocument()
 
     await unlock()
-    expect(sessionStorage.getItem('dress-kid-parent-unlocked')).toBe('1')
+    expect(Number(sessionStorage.getItem(UNLOCK_KEY))).toBeGreaterThan(0)
   })
 
-  it('blijft ontgrendeld binnen dezelfde sessie', async () => {
-    sessionStorage.setItem('dress-kid-parent-unlocked', '1')
+  it('blijft ontgrendeld bij herladen binnen de tijd', async () => {
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now() - 60_000))
     renderParent()
     expect(await screen.findByRole('button', { name: /Kleding toevoegen/ })).toBeInTheDocument()
+  })
+
+  it('is weer op slot als de ontgrendeling te oud is', () => {
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now() - UNLOCK_TTL_MS - 1000))
+    renderParent()
+    expect(screen.getByLabelText(/Hoeveel is 7 × 6/)).toBeInTheDocument()
+  })
+
+  it('negeert de oude waarde "1" uit een eerdere versie', () => {
+    sessionStorage.setItem(UNLOCK_KEY, '1')
+    renderParent()
+    expect(screen.getByLabelText(/Hoeveel is 7 × 6/)).toBeInTheDocument()
+  })
+
+  it('vergrendelt weer via de link naar de kinderomgeving', async () => {
+    renderParent()
+    await unlock()
+    fireEvent.click(screen.getByRole('link', { name: /Naar de kledingkast van je kind/ }))
+    expect(await screen.findByText('kind')).toBeInTheDocument()
+    await waitFor(() => expect(sessionStorage.getItem(UNLOCK_KEY)).toBeNull())
+  })
+
+  it('vergrendelt weer als de route wordt verlaten, maar niet in StrictMode-remount', async () => {
+    const { unmount } = render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/ouder']}>
+          <ParentApp store={store} makeSum={() => ({ a: 7, b: 6 })} />
+        </MemoryRouter>
+      </StrictMode>,
+    )
+    await unlock()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(sessionStorage.getItem(UNLOCK_KEY)).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Kleding toevoegen' })).toBeInTheDocument()
+    unmount()
+    await waitFor(() => expect(sessionStorage.getItem(UNLOCK_KEY)).toBeNull())
+  })
+
+  it('vergrendelt na te lange tijd met een verborgen pagina', async () => {
+    renderParent()
+    await unlock()
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now() - UNLOCK_TTL_MS - 1000))
+    fireEvent(document, new Event('visibilitychange'))
+    expect(await screen.findByLabelText(/Hoeveel is 7 × 6/)).toBeInTheDocument()
+    expect(sessionStorage.getItem(UNLOCK_KEY)).toBeNull()
+  })
+
+  it('vergrendelt bij activiteit na te lange inactiviteit', async () => {
+    renderParent()
+    await unlock()
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now() - UNLOCK_TTL_MS - 1000))
+    fireEvent.pointerDown(document.body)
+    expect(await screen.findByLabelText(/Hoeveel is 7 × 6/)).toBeInTheDocument()
+  })
+
+  it('vergrendelt via de periodieke controle', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    try {
+      renderParent()
+      await unlock()
+      act(() => {
+        vi.advanceTimersByTime(UNLOCK_TTL_MS + 20_000)
+      })
+      expect(await screen.findByLabelText(/Hoeveel is 7 × 6/)).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('verlengt de ontgrendeling bij activiteit', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      renderParent()
+      await unlock()
+      const before = Number(sessionStorage.getItem(UNLOCK_KEY))
+      vi.setSystemTime(Date.now() + 60_000)
+      fireEvent.pointerDown(document.body)
+      expect(Number(sessionStorage.getItem(UNLOCK_KEY))).toBe(before + 60_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('vraagt persistente opslag aan bij het ontgrendelen', async () => {
+    const persist = vi.fn().mockResolvedValue(true)
+    vi.stubGlobal('navigator', { ...navigator, storage: { persist } })
+    renderParent()
+    await unlock()
+    await waitFor(() => expect(persist).toHaveBeenCalled())
+    vi.unstubAllGlobals()
   })
 })
 
@@ -135,8 +228,8 @@ describe('kledingstuk', () => {
 
   it('slaat een uitsluiting symmetrisch op en toont alleen andere categorieën', async () => {
     await openShirt()
-    expect(screen.queryByRole('button', { name: /Ander shirt, past niet/ })).not.toBeInTheDocument()
-    const jeans = screen.getByRole('button', { name: /Jeans, past niet/ })
+    expect(screen.queryByRole('button', { name: /Past niet bij: Ander shirt/ })).not.toBeInTheDocument()
+    const jeans = screen.getByRole('button', { name: /Past niet bij: Jeans/ })
     fireEvent.click(jeans)
     expect(jeans).toHaveAttribute('aria-pressed', 'true')
     await waitFor(async () => {
@@ -192,5 +285,100 @@ describe('instellingen en back-up', () => {
     const alert = await screen.findByRole('alert')
     expect(alert.textContent?.length).toBeGreaterThan(5)
     expect(await store.listItems()).toHaveLength(1)
+  })
+
+  async function openBackup() {
+    renderParent()
+    await unlock()
+    fireEvent.click(screen.getByRole('button', { name: 'Back-up' }))
+    await screen.findByRole('button', { name: 'Back-up maken' })
+  }
+
+  it('toont de opslagstatus als de opslag beschermd is', async () => {
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      storage: {
+        persisted: vi.fn().mockResolvedValue(true),
+        persist: vi.fn().mockResolvedValue(true),
+        estimate: vi.fn().mockResolvedValue({ usage: 5 * 1024 * 1024, quota: 1e9 }),
+      },
+    })
+    await openBackup()
+    expect(await screen.findByText('Opslag is beschermd tegen automatisch opruimen.')).toBeInTheDocument()
+    expect(screen.getByText(/Ongeveer 5,0 MB in gebruik/)).toBeInTheDocument()
+  })
+
+  it('waarschuwt als de opslag niet beschermd is', async () => {
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      storage: { persisted: vi.fn().mockResolvedValue(false), persist: vi.fn().mockResolvedValue(false) },
+    })
+    await openBackup()
+    expect(await screen.findByText(/kan de kledingkast opruimen/)).toBeInTheDocument()
+  })
+
+  it('toont niets over opslag als de browser dat niet ondersteunt', async () => {
+    await openBackup()
+    expect(screen.queryByText(/beschermd|opruimen als/)).not.toBeInTheDocument()
+  })
+
+  it('deelt de back-up via het deelmenu als dat bestanden ondersteunt', async () => {
+    const share = vi.fn().mockResolvedValue(undefined)
+    const canShare = vi.fn().mockReturnValue(true)
+    vi.stubGlobal('navigator', { ...navigator, share, canShare })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    await openBackup()
+    fireEvent.click(screen.getByRole('button', { name: 'Back-up maken' }))
+    expect(await screen.findByText(/De back-up is gemaakt/)).toBeInTheDocument()
+    expect(share).toHaveBeenCalledTimes(1)
+    const shared = share.mock.calls[0]![0] as { files: File[] }
+    expect(shared.files[0]!.name).toMatch(/^dress-kid-backup-\d{4}-\d{2}-\d{2}\.json$/)
+    expect(click).not.toHaveBeenCalled()
+  })
+
+  it('meldt niets als de gebruiker het deelmenu annuleert', async () => {
+    const share = vi.fn().mockRejectedValue(new DOMException('geannuleerd', 'AbortError'))
+    vi.stubGlobal('navigator', { ...navigator, share, canShare: () => true })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    await openBackup()
+    fireEvent.click(screen.getByRole('button', { name: 'Back-up maken' }))
+    await waitFor(() => expect(share).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(screen.queryByText(/De back-up is gemaakt/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(click).not.toHaveBeenCalled()
+  })
+
+  it('valt terug op downloaden als delen niet kan of mislukt', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    // Geen share-ondersteuning
+    await openBackup()
+    fireEvent.click(screen.getByRole('button', { name: 'Back-up maken' }))
+    expect(await screen.findByText(/De back-up is gemaakt/)).toBeInTheDocument()
+    expect(click).toHaveBeenCalledTimes(1)
+
+    // share() gooit een andere fout
+    const share = vi.fn().mockRejectedValue(new Error('niet toegestaan'))
+    vi.stubGlobal('navigator', { ...navigator, share, canShare: () => true })
+    fireEvent.click(screen.getByRole('button', { name: 'Back-up maken' }))
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(2))
+    expect(share).toHaveBeenCalled()
+  })
+})
+
+describe('persistente opslag bij toevoegen', () => {
+  it('vraagt persistente opslag aan na de eerste geslaagde toevoeging', async () => {
+    const persist = vi.fn().mockResolvedValue(true)
+    vi.stubGlobal('navigator', { ...navigator, storage: { persist } })
+    renderParent()
+    await unlock()
+    await waitFor(() => expect(persist).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: /Kleding toevoegen/ }))
+    fireEvent.click(screen.getByRole('radio', { name: /Shirt/ }))
+    fireEvent.change(screen.getByLabelText("Foto's kiezen uit galerij"), {
+      target: { files: [new File(['a'], 'a.png', { type: 'image/png' })] },
+    })
+    await screen.findByText('Zojuist toegevoegd (1)')
+    expect(persist).toHaveBeenCalledTimes(2)
   })
 })

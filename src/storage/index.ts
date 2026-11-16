@@ -11,3 +11,6 @@ export function getStore(): WardrobeStore {
   instance ??= createIndexedDbStore()
   return instance
 }
+
+export { getStorageInfo, requestPersistentStorage } from './persistence'
+export type { StorageInfo } from './persistence'

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
 import type { Category, ClothingItem, ItemSeason } from '../domain/types'
@@ -31,6 +31,7 @@ export default function ItemDetail({ store, item, items, reload, onBack }: Props
   /** Optimistische uitsluitingen: id van ander kledingstuk -> verwachte stand. */
   const [optimistic, setOptimistic] = useState<Record<string, boolean>>({})
   const photoRef = useRef<HTMLInputElement>(null)
+  const nameId = useId()
   const photoUrl = usePhotoUrl(item.photo)
 
   async function run(action: () => Promise<void>, fallback: string): Promise<boolean> {
@@ -121,11 +122,11 @@ export default function ItemDetail({ store, item, items, reload, onBack }: Props
       ) : null}
 
       <div className="parent-field">
-        <label htmlFor="parent-item-name" className="parent-field-label">
+        <label htmlFor={nameId} className="parent-field-label">
           Naam (mag leeg blijven)
         </label>
         <input
-          id="parent-item-name"
+          id={nameId}
           type="text"
           value={name}
           maxLength={60}
@@ -184,7 +185,7 @@ export default function ItemDetail({ store, item, items, reload, onBack }: Props
                           type="button"
                           className={`parent-tile${excluded ? ' is-excluded' : ''}`}
                           aria-pressed={excluded}
-                          aria-label={`${itemLabel(other)}, past niet bij dit kledingstuk`}
+                          aria-label={`Past niet bij: ${itemLabel(other)}`}
                           onClick={() => void toggleExcluded(other, !excluded)}
                         >
                           <Thumb photo={other.photo} />
