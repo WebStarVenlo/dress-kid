@@ -1,0 +1,92 @@
+name: CI en deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Standaard alleen lezen; de deploy-job vraagt zelf id-token aan.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Controleren en bouwen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: dist als artifact bewaren
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deployen naar Azure Storage
+    needs: build
+    # Alleen op main, en alleen als het Azure-opslagaccount is ingesteld.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_STORAGE_ACCOUNT != ''
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    # Geen twee deploys tegelijk naar dezelfde container.
+    concurrency:
+      group: deploy-azure-storage
+      cancel-in-progress: false
+    env:
+      STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Inloggen bij Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Bestanden uploaden naar $web
+        run: |
+          az storage blob upload-batch \
+            --account-name "$STORAGE_ACCOUNT" \
+            --auth-mode login \
+            -d '$web' \
+            -s dist \
+            --overwrite
+
+      # Deze bestanden moeten altijd vers worden opgehaald, zodat PWA-updates aankomen.
+      - name: Cache-headers instellen voor index.html, sw.js en manifest
+        run: |
+          set -euo pipefail
+          for entry in \
+            "index.html|text/html; charset=utf-8" \
+            "sw.js|application/javascript" \
+            "manifest.webmanifest|application/manifest+json"; do
+            name="${entry%%|*}"
+            type="${entry#*|}"
+            az storage blob update \
+              --account-name "$STORAGE_ACCOUNT" \
+              --auth-mode login \
+              --container-name '$web' \
+              --name "$name" \
+              --content-type "$type" \
+              --content-cache-control "no-cache"
+          done
