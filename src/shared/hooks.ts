@@ -1,7 +1,7 @@
 /** React-hooks die zowel de kind- als de ouderomgeving gebruiken. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_SETTINGS } from '../domain/types'
-import type { ClothingItem, Settings } from '../domain/types'
+import type { Child, ClothingItem, Settings } from '../domain/types'
 import { getStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 
@@ -114,6 +114,56 @@ export function useWardrobe(store: WardrobeStore = getStore()): WardrobeState {
       next = { error: LOAD_ERROR }
     }
     // Alleen het laatst gestarte verzoek telt, en niet meer na unmount.
+    if (!mountedRef.current || request !== requestRef.current) return
+    setState((prev) => ({ ...prev, ...next, loading: false }))
+  }, [store])
+
+  useEffect(() => {
+    mountedRef.current = true
+    void load()
+    return () => {
+      mountedRef.current = false
+    }
+  }, [load])
+
+  return { ...state, reload: load }
+}
+
+// ---------------------------------------------------------------------------
+// useChildren
+
+export interface ChildrenState {
+  children: Child[]
+  /** True totdat de eerste keer laden klaar is (gelukt of mislukt). */
+  loading: boolean
+  error: string | undefined
+  /** Haalt de kinderen opnieuw op. Gooit nooit; fouten komen in `error`. */
+  reload: () => Promise<void>
+}
+
+const CHILDREN_LOAD_ERROR = 'De kinderen konden niet worden geladen. Probeer het opnieuw.'
+
+interface LoadedChildren {
+  children: Child[]
+  loading: boolean
+  error: string | undefined
+}
+
+/** Laadt de kinderen uit de opslag, in de volgorde waarin ze zijn toegevoegd. */
+export function useChildren(store: WardrobeStore = getStore()): ChildrenState {
+  const [state, setState] = useState<LoadedChildren>({ children: [], loading: true, error: undefined })
+  const mountedRef = useRef(false)
+  const requestRef = useRef(0)
+
+  const load = useCallback(async () => {
+    const request = ++requestRef.current
+    let next: Partial<LoadedChildren>
+    try {
+      next = { children: await store.listChildren(), error: undefined }
+    } catch (error) {
+      console.error(error)
+      next = { error: CHILDREN_LOAD_ERROR }
+    }
     if (!mountedRef.current || request !== requestRef.current) return
     setState((prev) => ({ ...prev, ...next, loading: false }))
   }, [store])
