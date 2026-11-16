@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { CurrentSeason, Settings } from '../domain/types'
 import type { WardrobeStore } from '../storage'
+import PinSettings from './PinSettings'
 import { ChoiceGroup, errorMessage } from './shared'
 
 const OPTIONS: Array<{ value: CurrentSeason; label: string }> = [
@@ -55,6 +56,7 @@ export default function SettingsPanel({ store, settings, reload }: Props) {
           {error}
         </p>
       ) : null}
+      <PinSettings store={store} />
     </section>
   )
 }
