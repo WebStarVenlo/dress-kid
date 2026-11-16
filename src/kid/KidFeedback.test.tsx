@@ -1,0 +1,126 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import type { Category } from '../domain/types'
+import { canSpeak, playSound, setFeedbackEnabled, speak } from '../shared/feedback'
+import { createIndexedDbStore } from '../storage'
+import type { WardrobeStore } from '../storage'
+import KidApp from './KidApp'
+
+// Geluid en spraak nabootsen: in jsdom bestaan ze niet, en we willen zien wát er gezegd wordt.
+vi.mock('../shared/feedback', () => ({
+  canSpeak: vi.fn(() => true),
+  speak: vi.fn(),
+  stopSpeaking: vi.fn(),
+  playSound: vi.fn(),
+  vibrate: vi.fn(),
+  setFeedbackEnabled: vi.fn(),
+  isFeedbackEnabled: vi.fn(() => true),
+}))
+
+let counter = 0
+async function newStore(names: string[] = ['Sam'], soundEnabled = true): Promise<WardrobeStore> {
+  counter += 1
+  const store = createIndexedDbStore(`kid-feedback-${counter}-${Math.random()}`)
+  for (const name of names) await store.addChild({ name, color: '#3366ff', sizes: {} })
+  await store.saveSettings({ currentSeason: 'all', soundEnabled })
+  return store
+}
+
+async function add(store: WardrobeStore, category: Category, name: string) {
+  return store.addItem({ category, name, season: 'all', photo: new Blob([name], { type: 'image/jpeg' }) })
+}
+
+function renderKid(store: WardrobeStore) {
+  return render(
+    <MemoryRouter>
+      <KidApp store={store} />
+    </MemoryRouter>,
+  )
+}
+
+const click = (el: HTMLElement) => fireEvent.click(el)
+
+beforeAll(() => {
+  URL.createObjectURL = vi.fn(() => 'blob:test')
+  URL.revokeObjectURL = vi.fn()
+})
+
+beforeEach(() => {
+  vi.mocked(canSpeak).mockReturnValue(true)
+})
+
+afterEach(() => {
+  vi.clearAllMocks()
+  window.localStorage.clear()
+})
+
+describe('KidApp: geluid en voorlezen', () => {
+  it('leest de vraag van de huidige soort voor', async () => {
+    const store = await newStore()
+    await add(store, 'top', 'Rood shirt')
+    renderKid(store)
+    expect(await screen.findByText('Welk shirt wil je?')).toBeInTheDocument()
+    click(screen.getByRole('button', { name: 'Voorlezen' }))
+    expect(speak).toHaveBeenCalledWith('Welk shirt wil je?')
+  })
+
+  it('volgt de geluidsinstelling en verbergt dan de luidspreker', async () => {
+    const store = await newStore(['Sam'], false)
+    await add(store, 'top', 'Rood shirt')
+    renderKid(store)
+    expect(await screen.findByRole('button', { name: 'Rood shirt' })).toBeInTheDocument()
+    expect(setFeedbackEnabled).toHaveBeenLastCalledWith(false)
+    expect(screen.queryByRole('button', { name: 'Voorlezen' })).not.toBeInTheDocument()
+  })
+
+  it('zet geluid aan als de ouder dat wil', async () => {
+    const store = await newStore()
+    await add(store, 'top', 'Rood shirt')
+    renderKid(store)
+    await screen.findByRole('button', { name: 'Rood shirt' })
+    await waitFor(() => expect(setFeedbackEnabled).toHaveBeenLastCalledWith(true))
+  })
+
+  it('verbergt de luidspreker als de browser niet kan voorlezen', async () => {
+    vi.mocked(canSpeak).mockReturnValue(false)
+    const store = await newStore()
+    await add(store, 'top', 'Rood shirt')
+    renderKid(store)
+    expect(await screen.findByRole('button', { name: 'Rood shirt' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Voorlezen' })).not.toBeInTheDocument()
+  })
+
+  it('geeft geluid bij kiezen, ontkiezen en wisselen van tabblad, en leest de volgende vraag voor', async () => {
+    const store = await newStore()
+    await add(store, 'top', 'Rood shirt')
+    await add(store, 'bottom', 'Broek')
+    renderKid(store)
+    click(await screen.findByRole('button', { name: 'Rood shirt' }))
+    expect(playSound).toHaveBeenLastCalledWith('pick')
+    expect(speak).toHaveBeenLastCalledWith('Welke broek of rok?')
+    expect(await screen.findByText('Welke broek of rok?')).toBeInTheDocument()
+
+    click(screen.getByRole('tab', { name: /Shirt/ }))
+    expect(playSound).toHaveBeenLastCalledWith('tap')
+    click(screen.getByRole('button', { name: 'Rood shirt' }))
+    expect(playSound).toHaveBeenLastCalledWith('unpick')
+  })
+
+  it('speelt het feestgeluid bij Klaar en de sticker-pling', async () => {
+    const store = await newStore()
+    await add(store, 'top', 'Rood shirt')
+    renderKid(store)
+    click(await screen.findByRole('button', { name: 'Rood shirt' }))
+    click(screen.getByRole('button', { name: /Klaar/ }))
+    expect(playSound).toHaveBeenLastCalledWith('done')
+    expect(await screen.findByText('Je hebt 1 sticker!')).toBeInTheDocument()
+    await waitFor(() => expect(playSound).toHaveBeenLastCalledWith('sticker'), { timeout: 2500 })
+  })
+
+  it('begroet het kind bij het kiezen van een profiel', async () => {
+    const store = await newStore(['Sam', 'Noor'])
+    renderKid(store)
+    click(await screen.findByRole('button', { name: /Noor/ }))
+    expect(speak).toHaveBeenCalledWith('Hoi Noor! Wat trek je vandaag aan?')
+  })
+})

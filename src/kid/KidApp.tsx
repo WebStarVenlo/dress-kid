@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import {
   chooseItem,
   conflictingCategories,
@@ -10,15 +10,26 @@ import {
   visibleCategories,
 } from '../domain/compat'
 import { itemFitsChild } from '../domain/sizes'
-import { CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
-import type { Category, Child, ClothingItem, Outfit } from '../domain/types'
-import { useChildren, usePhotoUrl, useWardrobe } from '../shared/hooks'
+import type { Category, Child, ClothingItem, Outfit, Settings } from '../domain/types'
+import { canSpeak, playSound, setFeedbackEnabled, speak, vibrate } from '../shared/feedback'
+import { useChildren, useWardrobe } from '../shared/hooks'
+import { IconRestart, IconUndo } from '../shared/icons'
 import { getStore } from '../storage'
 import type { WardrobeStore } from '../storage'
+import { CategoryTabs } from './CategoryTabs'
+import { Celebration } from './Celebration'
+import { ItemTile } from './ItemTile'
+import { ChildAvatar } from './KidArt'
+import { KidHeader } from './KidHeader'
+import { KidPage, KidStatus, MascotGuide, ParentsButton, RetryButton } from './KidLayout'
+import { CATEGORY_QUESTIONS, flyPhoto, prefersReducedMotion, resolveSeason, slotCategories } from './kidUtils'
+import type { FlightStart } from './kidUtils'
+import { OutfitDock, ProgressBar } from './OutfitDock'
 import './kid.css'
 
-/** Volgorde waarin de gekozen kleding op het "lichaam" getoond wordt. */
+/** Volgorde waarin de gekozen kleding op het feestscherm getoond wordt (van boven naar beneden). */
 const BODY_ORDER: readonly Category[] = [
+  'accessory',
   'jacket',
   'sweater',
   'top',
@@ -26,7 +37,6 @@ const BODY_ORDER: readonly Category[] = [
   'bottom',
   'socks',
   'shoes',
-  'accessory',
 ]
 
 type Screen = 'choose' | 'done'
@@ -35,6 +45,8 @@ type Screen = 'choose' | 'done'
 const UNDO_MS = 5000
 /** Hoe vaak we controleren of het inmiddels een nieuwe dag is. */
 const DAY_CHECK_MS = 60_000
+/** Even wachten na een keuze, zodat het kind het vinkje ziet, voordat de volgende soort komt. */
+const ADVANCE_MS = 650
 /** Sleutel in localStorage waaronder het gekozen kind onthouden wordt. */
 export const ACTIVE_CHILD_KEY = 'dress-kid-active-child'
 
@@ -55,115 +67,69 @@ function writeActiveChild(id: string | undefined): void {
   }
 }
 
-function initial(child: Child): string {
-  return (Array.from(child.name.trim())[0] ?? '?').toUpperCase()
-}
-
-function itemLabel(item: ClothingItem): string {
-  return item.name ?? CATEGORY_LABELS[item.category]
-}
-
-function Photo({ item, className }: { item: ClothingItem; className?: string }) {
-  const url = usePhotoUrl(item.photo)
-  return <img className={className} src={url} alt="" draggable={false} />
-}
-
-function ItemTile({
-  item,
-  selected,
-  onChoose,
-}: {
-  item: ClothingItem
-  selected: boolean
-  onChoose: (item: ClothingItem) => void
-}) {
-  return (
-    <button
-      type="button"
-      className={`kid-tile${selected ? ' kid-tile--selected' : ''}`}
-      aria-pressed={selected}
-      aria-label={itemLabel(item)}
-      onClick={() => onChoose(item)}
-    >
-      <Photo item={item} className="kid-tile__photo" />
-      {selected ? (
-        <span className="kid-tile__check" aria-hidden="true">
-          ✓
-        </span>
-      ) : null}
-    </button>
-  )
-}
-
-function Avatar({ child, className }: { child: Child; className: string }) {
-  return (
-    <span className={className} style={{ backgroundColor: child.color }} aria-hidden="true">
-      {initial(child)}
-    </span>
-  )
-}
-
-function SimpleHeader({ title }: { title: string }) {
-  return (
-    <header className="kid-header">
-      <h1 className="kid-title">{title}</h1>
-      <div className="kid-header__actions">
-        <Link className="kid-parent-link" to="/ouder" aria-label="Voor ouders" title="Voor ouders">
-          <span aria-hidden="true">⚙️</span>
-        </Link>
-      </div>
-    </header>
-  )
+/** Kan en mag er voorgelezen worden? */
+function talkable(settings: Settings | undefined): boolean {
+  return settings !== undefined && settings.soundEnabled && canSpeak()
 }
 
 export default function KidApp({ store }: { store?: WardrobeStore }) {
   const activeStore = store ?? getStore()
   const { children, loading, error, reload } = useChildren(activeStore)
   const [chosenId, setChosenId] = useState<string | undefined>(readActiveChild)
+  // Instellingen alvast ophalen: voor het seizoen en het geluid op het profielscherm.
+  const [settings, setSettings] = useState<Settings | undefined>(undefined)
+
+  useEffect(() => {
+    let cancelled = false
+    activeStore.getSettings().then(
+      (loaded) => {
+        if (cancelled) return
+        setFeedbackEnabled(loaded.soundEnabled)
+        setSettings(loaded)
+      },
+      (e: unknown) => console.error(e),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [activeStore])
+
+  const season = resolveSeason(settings?.currentSeason)
+  const guide = <MascotGuide />
 
   if (loading) {
     return (
-      <main className="kid-app">
-        <SimpleHeader title="Wat trek je vandaag aan?" />
-        <p className="kid-status" role="status">
-          <span className="kid-bounce" aria-hidden="true">
-            👕
-          </span>
-          Even wachten…
-        </p>
-      </main>
+      <KidPage season={season}>
+        <KidHeader title="Wat trek je vandaag aan?" guide={guide} />
+        <KidStatus role="status">
+          <p>Even wachten…</p>
+        </KidStatus>
+      </KidPage>
     )
   }
 
   if (error) {
     return (
-      <main className="kid-app">
-        <SimpleHeader title="Wat trek je vandaag aan?" />
-        <div className="kid-status" role="alert">
+      <KidPage season={season}>
+        <KidHeader title="Wat trek je vandaag aan?" guide={guide} />
+        <KidStatus role="alert" art="oops">
           <p>{error}</p>
-          <button type="button" className="kid-big-btn" onClick={() => void reload()}>
-            <span aria-hidden="true">🔄</span> Opnieuw proberen
-          </button>
-        </div>
-      </main>
+          <RetryButton onRetry={() => void reload()} />
+        </KidStatus>
+      </KidPage>
     )
   }
 
   if (children.length === 0) {
     return (
-      <main className="kid-app">
-        <SimpleHeader title="Wat trek je vandaag aan?" />
-        <div className="kid-status kid-empty">
-          <div className="kid-empty__emoji" aria-hidden="true">
-            👋
-          </div>
-          <p>Hoi! Er is nog niemand om aan te kleden.</p>
+      <KidPage season={season}>
+        <KidHeader title="Wat trek je vandaag aan?" guide={guide} />
+        <KidStatus art="empty">
+          <p className="kid-status__lead">Hoi! Er is nog niemand om aan te kleden.</p>
           <p>Een grote mens moet eerst een kind toevoegen.</p>
-          <Link className="button kid-big-btn" to="/ouder">
-            <span aria-hidden="true">⚙️</span> Naar de ouders
-          </Link>
-        </div>
-      </main>
+          <ParentsButton />
+        </KidStatus>
+      </KidPage>
     )
   }
 
@@ -172,27 +138,34 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
 
   if (!child) {
     return (
-      <main className="kid-app">
-        <SimpleHeader title="Wie ben jij?" />
+      <KidPage season={season}>
+        <KidHeader
+          title="Wie ben jij?"
+          guide={guide}
+          onSpeak={talkable(settings) ? () => speak('Hoi! Wie ben jij?') : undefined}
+        />
         <ul className="kid-profiles">
-          {children.map((c) => (
-            <li key={c.id}>
+          {children.map((c, i) => (
+            <li key={c.id} style={{ '--i': i } as CSSProperties}>
               <button
                 type="button"
                 className="kid-profile"
-                style={{ borderColor: c.color }}
+                style={{ '--kid-color': c.color } as CSSProperties}
                 onClick={() => {
+                  playSound('pick')
+                  vibrate()
+                  speak(`Hoi ${c.name}! Wat trek je vandaag aan?`)
                   writeActiveChild(c.id)
                   setChosenId(c.id)
                 }}
               >
-                <Avatar child={c} className="kid-profile__avatar" />
+                <ChildAvatar child={c} className="kid-avatar--profile" />
                 <span className="kid-profile__name">{c.name}</span>
               </button>
             </li>
           ))}
         </ul>
-      </main>
+      </KidPage>
     )
   }
 
@@ -204,6 +177,7 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
       onSwitch={
         children.length > 1
           ? () => {
+              playSound('tap')
               writeActiveChild(undefined)
               setChosenId(undefined)
             }
@@ -233,7 +207,26 @@ function KidDay({
   const [day, setDay] = useState(() => todayKey())
   // De outfit van vóór "Opnieuw beginnen", een paar seconden lang terug te halen.
   const [undoOutfit, setUndoOutfit] = useState<Outfit | undefined>(undefined)
+  // Stickerboek: aantal afgeronde dagen (undefined = nog niet geteld) en of er net één bij kwam.
+  const [stickers, setStickers] = useState<number | undefined>(undefined)
+  const [freshSticker, setFreshSticker] = useState(false)
+  const [marking, setMarking] = useState(false)
   const loadedDayRef = useRef<string | undefined>(undefined)
+  const advanceRef = useRef<number | undefined>(undefined)
+  const flightRef = useRef<(FlightStart & { category: Category }) | undefined>(undefined)
+  const dockRef = useRef<HTMLDivElement>(null)
+
+  // Geluid en voorlezen volgen de instelling van de ouder.
+  useEffect(() => {
+    if (!loading) setFeedbackEnabled(settings.soundEnabled)
+  }, [loading, settings.soundEnabled])
+
+  const clearAdvance = useCallback(() => {
+    if (advanceRef.current !== undefined) window.clearTimeout(advanceRef.current)
+    advanceRef.current = undefined
+  }, [])
+
+  useEffect(() => clearAdvance, [clearAdvance])
 
   // De opgeslagen outfit van `day` ophalen en opruimen; opnieuw als de dag verandert.
   useEffect(() => {
@@ -249,16 +242,34 @@ function KidDay({
       if (cancelled) return
       loadedDayRef.current = day
       const pruned = pruneOutfit(items, settings, saved)
+      clearAdvance()
       setOutfit(pruned)
       setScreen(isOutfitReady(items, settings, pruned) ? 'done' : 'choose')
       setActive(undefined)
       setUndoOutfit(undefined)
+      setStickers(undefined)
+      setFreshSticker(false)
       setOutfitReady(true)
     })()
     return () => {
       cancelled = true
     }
-  }, [loading, error, items, settings, activeStore, child.id, day])
+  }, [loading, error, items, settings, activeStore, child.id, day, clearAdvance])
+
+  // Op het feestscherm het stickerboek tellen (ook als de dag al eerder klaar was).
+  useEffect(() => {
+    if (screen !== 'done' || marking || stickers !== undefined) return undefined
+    let cancelled = false
+    activeStore.countCompletedDays(child.id).then(
+      (count) => {
+        if (!cancelled) setStickers(count)
+      },
+      (e: unknown) => console.error(e),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [screen, marking, stickers, activeStore, child.id])
 
   // Is het inmiddels een nieuwe dag? Zo ja, begin opnieuw met een lege outfit en meld dat terug.
   const rollOverIfNeeded = useCallback((): boolean => {
@@ -294,6 +305,15 @@ function KidDay({
     return () => window.clearTimeout(timer)
   }, [undoOutfit])
 
+  // Na een keuze vliegt de foto naar zijn vakje op de paspop (pas nu bestaat dat vakje).
+  useLayoutEffect(() => {
+    const flight = flightRef.current
+    flightRef.current = undefined
+    if (!flight) return
+    const slot = dockRef.current?.querySelector<HTMLElement>(`[data-slot="${flight.category}"]`)
+    if (slot) flyPhoto(flight, slot)
+  }, [outfit])
+
   const update = useCallback(
     (next: Outfit) => {
       setOutfit(next)
@@ -306,6 +326,8 @@ function KidDay({
   const current: Category | undefined =
     active !== undefined && categories.includes(active) ? active : categories[0]
   const complete = isOutfitReady(items, settings, outfit)
+  const slots = slotCategories(categories, outfit)
+  const canTalk = talkable(loading ? undefined : settings)
 
   const byId = new Map(items.map((i) => [i.id, i]))
   const chosen: ClothingItem[] = BODY_ORDER.flatMap((category) => {
@@ -320,30 +342,73 @@ function KidDay({
   }
 
   function nextCategory(from: Category, o: Outfit): Category | undefined {
+    // Alleen soorten die nog meetellen: na shirt of broek bieden we geen jurk meer aan.
+    const open = slotCategories(categories, o)
     const start = categories.indexOf(from)
     for (let step = 1; step < categories.length; step += 1) {
       const category = categories[(start + step) % categories.length]
-      if (category === undefined || o[category] !== undefined || isDimmed(category, o)) continue
+      if (category === undefined || o[category] !== undefined || !open.includes(category)) continue
+      if (isDimmed(category, o)) continue
       if (selectableItems(items, settings, o, category).length > 0) return category
     }
     return undefined
   }
 
-  function handleChoose(item: ClothingItem) {
+  function selectTab(category: Category) {
+    clearAdvance()
+    if (category !== current) playSound('tap')
+    setActive(category)
+  }
+
+  function handleChoose(item: ClothingItem, tile: HTMLElement) {
     // Een tik na middernacht rolt eerst de dag om, en wordt niet onder de oude dag bewaard.
     if (rollOverIfNeeded()) return
+    clearAdvance()
     const wasChosen = outfit[item.category] === item.id
     setUndoOutfit(undefined)
     const next = chooseItem(items, settings, outfit, item)
     update(next)
-    if (!wasChosen && next[item.category] === item.id) {
-      const target = nextCategory(item.category, next)
-      if (target) setActive(target)
+    if (wasChosen || next[item.category] !== item.id) {
+      playSound('unpick')
+      return
     }
+
+    playSound('pick')
+    vibrate()
+    const photo = tile.querySelector('img')
+    if (photo?.src) flightRef.current = { rect: photo.getBoundingClientRect(), src: photo.src, category: item.category }
+
+    const target = nextCategory(item.category, next)
+    if (target) {
+      speak(CATEGORY_QUESTIONS[target])
+      // Eerst het vinkje laten zien, dan pas door naar de volgende soort.
+      if (prefersReducedMotion()) setActive(target)
+      else advanceRef.current = window.setTimeout(() => setActive(target), ADVANCE_MS)
+    } else if (isOutfitReady(items, settings, next)) {
+      speak('Goed zo! Tik op klaar.')
+    }
+  }
+
+  function handleReady() {
+    if (rollOverIfNeeded()) return
+    clearAdvance()
+    playSound('done')
+    vibrate(40)
+    speak(`Super, ${child.name}!`)
+    setScreen('done')
+    setFreshSticker(true)
+    setStickers(undefined)
+    setMarking(true)
+    activeStore
+      .markOutfitCompleted(child.id, day)
+      .catch((e: unknown) => console.error(e))
+      .finally(() => setMarking(false))
   }
 
   function restart() {
     if (rollOverIfNeeded()) return
+    clearAdvance()
+    playSound('unpick')
     setUndoOutfit(outfit)
     update({})
     setScreen('choose')
@@ -352,132 +417,133 @@ function KidDay({
 
   function undoRestart() {
     if (undoOutfit === undefined) return
+    playSound('pick')
     update(undoOutfit)
     setUndoOutfit(undefined)
   }
 
-  const header = (title: string) => (
-    <header className="kid-header">
-      <h1 className="kid-title">{title}</h1>
-      <div className="kid-header__actions">
-        {onSwitch ? (
-          <button
-            type="button"
-            className="kid-switch"
-            style={{ borderColor: child.color }}
-            aria-label={`Wie ben jij? Nu: ${child.name}`}
-            title="Ander kind kiezen"
-            onClick={onSwitch}
-          >
-            <Avatar child={child} className="kid-switch__avatar" />
-          </button>
-        ) : null}
-        {outfitReady && undoOutfit !== undefined ? (
-          <button
-            type="button"
-            className="kid-icon-btn kid-icon-btn--undo"
-            aria-label="Ongedaan maken"
-            title="Ongedaan maken"
-            onClick={undoRestart}
-          >
-            <span aria-hidden="true">↩️</span>
-          </button>
-        ) : null}
-        {outfitReady && Object.keys(outfit).length > 0 ? (
-          <button
-            type="button"
-            className="kid-icon-btn"
-            aria-label="Opnieuw beginnen"
-            title="Opnieuw beginnen"
-            onClick={restart}
-          >
-            <span aria-hidden="true">🔄</span>
-          </button>
-        ) : null}
-        <Link className="kid-parent-link" to="/ouder" aria-label="Voor ouders" title="Voor ouders">
-          <span aria-hidden="true">⚙️</span>
-        </Link>
-      </div>
-    </header>
+  const guide = onSwitch ? (
+    <button
+      type="button"
+      className="kid-switch"
+      aria-label={`Wie ben jij? Nu: ${child.name}`}
+      title="Ander kind kiezen"
+      onClick={onSwitch}
+    >
+      <ChildAvatar child={child} />
+    </button>
+  ) : (
+    <ChildAvatar child={child} />
   )
+
+  const restartButton =
+    outfitReady && Object.keys(outfit).length > 0 ? (
+      <button
+        type="button"
+        className="kid-icon-btn"
+        aria-label="Opnieuw beginnen"
+        title="Opnieuw beginnen"
+        onClick={restart}
+      >
+        <IconRestart size={26} />
+      </button>
+    ) : null
+
+  const undoButton =
+    outfitReady && undoOutfit !== undefined ? (
+      <button
+        type="button"
+        className="kid-icon-btn kid-icon-btn--undo"
+        aria-label="Ongedaan maken"
+        title="Ongedaan maken"
+        onClick={undoRestart}
+      >
+        <svg className="kid-undo-ring" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+          <circle cx={32} cy={32} r={28} />
+        </svg>
+        <IconUndo size={28} />
+      </button>
+    ) : null
+
+  const header = (title: string, question?: string, actions: ReactNode = undoButton) => {
+    const spoken = question ?? title
+    return (
+      <KidHeader
+        title={title}
+        question={question}
+        guide={guide}
+        actions={actions}
+        onSpeak={canTalk ? () => speak(spoken) : undefined}
+      />
+    )
+  }
+
+  const season = resolveSeason(loading ? undefined : settings.currentSeason)
 
   if (loading || (!error && !outfitReady)) {
     return (
-      <main className="kid-app">
+      <KidPage season={season}>
         {header('Wat trek je vandaag aan?')}
-        <p className="kid-status" role="status">
-          <span className="kid-bounce" aria-hidden="true">
-            👕
-          </span>
-          Even wachten…
-        </p>
-      </main>
+        <KidStatus role="status">
+          <p>Even wachten…</p>
+        </KidStatus>
+      </KidPage>
     )
   }
 
   if (error) {
     return (
-      <main className="kid-app">
+      <KidPage season={season}>
         {header('Wat trek je vandaag aan?')}
-        <div className="kid-status" role="alert">
+        <KidStatus role="alert" art="oops">
           <p>{error}</p>
-          <button type="button" className="kid-big-btn" onClick={() => void reload()}>
-            <span aria-hidden="true">🔄</span> Opnieuw proberen
-          </button>
-        </div>
-      </main>
+          <RetryButton onRetry={() => void reload()} />
+        </KidStatus>
+      </KidPage>
     )
   }
 
   if (categories.length === 0) {
     return (
-      <main className="kid-app">
+      <KidPage season={season}>
         {header('Wat trek je vandaag aan?')}
-        <div className="kid-status kid-empty">
-          <div className="kid-empty__emoji" aria-hidden="true">
-            🧺
-          </div>
+        <KidStatus art="empty">
           {allItems.length === 0 ? (
             <>
-              <p>De kleerkast is nog leeg.</p>
+              <p className="kid-status__lead">De kleerkast is nog leeg.</p>
               <p>Een grote mens kan er kleren in doen.</p>
             </>
           ) : (
             <>
-              <p>Er zijn nu geen kleren om uit te kiezen.</p>
+              <p className="kid-status__lead">Er zijn nu geen kleren om uit te kiezen.</p>
               <p>Een grote mens kan kijken naar het seizoen of naar kleren die in de was zijn.</p>
               {items.length === 0 ? (
                 <p>Er is geen kleding in jouw maat. Vraag een grote mens om je maten na te kijken.</p>
               ) : null}
             </>
           )}
-          <Link className="button kid-big-btn" to="/ouder">
-            <span aria-hidden="true">⚙️</span> Naar de ouders
-          </Link>
-        </div>
-      </main>
+          <ParentsButton />
+        </KidStatus>
+      </KidPage>
     )
   }
 
   if (screen === 'done' && complete) {
     return (
-      <main className="kid-app kid-app--done">
-        {header('Dit trek ik vandaag aan!')}
-        <div className="kid-party" aria-hidden="true">
-          🎉
-        </div>
-        <ul className="kid-done-list">
-          {chosen.map((item) => (
-            <li key={item.id} className="kid-done-item">
-              <Photo item={item} className="kid-done-item__photo" />
-              <span className="visually-hidden">{itemLabel(item)}</span>
-            </li>
-          ))}
-        </ul>
-        <button type="button" className="kid-big-btn kid-big-btn--secondary" onClick={() => setScreen('choose')}>
-          <span aria-hidden="true">↩️</span> Veranderen
-        </button>
-      </main>
+      <KidPage season={season} className="kid-app--done">
+        {header('Dit trek ik vandaag aan!', undefined, null)}
+        <Celebration
+          child={child}
+          chosen={chosen}
+          stickers={stickers}
+          fresh={freshSticker}
+          extraAction={restartButton}
+          onChange={() => {
+            playSound('tap')
+            setScreen('choose')
+          }}
+        />
+      </KidPage>
     )
   }
 
@@ -485,99 +551,73 @@ function KidDay({
   const dimmedCurrent = current !== undefined && isDimmed(current, outfit)
 
   return (
-    <main className="kid-app">
-      {header('Wat trek je vandaag aan?')}
+    <KidPage season={season}>
+      {header(
+        'Wat trek je vandaag aan?',
+        current ? CATEGORY_QUESTIONS[current] : undefined,
+        <>
+          {undoButton}
+          {restartButton}
+        </>,
+      )}
 
-      <div className="kid-tabs" role="tablist" aria-label="Soort kleding">
-        {categories.map((category) => {
-          const has = outfit[category] !== undefined
-          const dimmed = isDimmed(category, outfit)
-          const cls = [
-            'kid-tab',
-            category === current ? 'kid-tab--active' : '',
-            has ? 'kid-tab--done' : '',
-            dimmed ? 'kid-tab--dimmed' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')
-          return (
-            <button
-              key={category}
-              type="button"
-              id={`kid-tab-${category}`}
-              role="tab"
-              className={cls}
-              aria-selected={category === current}
-              aria-controls="kid-panel"
-              aria-label={`${CATEGORY_LABELS[category]}${has ? ' (gekozen)' : ''}`}
-              onClick={() => setActive(category)}
-            >
-              <span className="kid-tab__emoji" aria-hidden="true">
-                {CATEGORY_EMOJI[category]}
-              </span>
-              <span className="kid-tab__label" aria-hidden="true">
-                {CATEGORY_LABELS[category]}
-              </span>
-              {has ? (
-                <span className="kid-tab__check" aria-hidden="true">
-                  ✓
+      <div className="kid-play">
+        <div className="kid-play__main">
+          <ProgressBar slots={slots} outfit={outfit} />
+          <CategoryTabs
+            categories={categories}
+            current={current}
+            outfit={outfit}
+            isDimmed={(category) => isDimmed(category, outfit)}
+            onSelect={selectTab}
+          />
+
+          <section
+            className="kid-choices"
+            id="kid-panel"
+            role="tabpanel"
+            aria-labelledby={current ? `kid-tab-${current}` : undefined}
+          >
+            {dimmedCurrent ? (
+              <p className="kid-note">
+                <span className="kid-note__emoji" aria-hidden="true">
+                  👗
                 </span>
-              ) : null}
-            </button>
-          )
-        })}
+                Je hebt een jurk gekozen. Kies hier iets om te wisselen.
+              </p>
+            ) : null}
+            {shown.length === 0 ? (
+              <p className="kid-note kid-note--empty">
+                <span className="kid-note__emoji" aria-hidden="true">
+                  🤷
+                </span>
+                Hier past niets bij.
+              </p>
+            ) : (
+              <div className="kid-grid" key={current}>
+                {shown.map((item, i) => (
+                  <ItemTile
+                    key={item.id}
+                    item={item}
+                    index={i}
+                    selected={outfit[item.category] === item.id}
+                    onChoose={handleChoose}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <OutfitDock
+          ref={dockRef}
+          slots={slots}
+          outfit={outfit}
+          byId={byId}
+          complete={complete}
+          onReady={handleReady}
+        />
       </div>
-
-      <section
-        className="kid-choices"
-        id="kid-panel"
-        role="tabpanel"
-        aria-labelledby={current ? `kid-tab-${current}` : undefined}
-      >
-        {dimmedCurrent ? (
-          <p className="kid-note">
-            <span aria-hidden="true">👗</span> Je hebt een jurk gekozen. Kies hier iets om te wisselen.
-          </p>
-        ) : null}
-        {shown.length === 0 ? (
-          <p className="kid-note kid-note--empty">
-            <span aria-hidden="true">🤷</span> Hier past niets bij.
-          </p>
-        ) : (
-          <div className="kid-grid">
-            {shown.map((item) => (
-              <ItemTile
-                key={item.id}
-                item={item}
-                selected={outfit[item.category] === item.id}
-                onChoose={handleChoose}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <footer className="kid-preview">
-        <ul className="kid-preview__list" aria-label="Jouw outfit">
-          {chosen.length === 0 ? (
-            <li className="kid-preview__empty" aria-hidden="true">
-              👕 👖 👟
-            </li>
-          ) : (
-            chosen.map((item) => (
-              <li key={item.id} className="kid-preview__item">
-                <Photo item={item} className="kid-preview__photo" />
-                <span className="visually-hidden">{itemLabel(item)}</span>
-              </li>
-            ))
-          )}
-        </ul>
-        {complete ? (
-          <button type="button" className="kid-big-btn kid-ready" onClick={() => setScreen('done')}>
-            <span aria-hidden="true">✅</span> Klaar!
-          </button>
-        ) : null}
-      </footer>
-    </main>
+    </KidPage>
   )
 }
