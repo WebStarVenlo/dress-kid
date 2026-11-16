@@ -6,26 +6,48 @@
 
 .parent .pin-input {
   width: 100%;
-  max-width: 12rem;
-  font-size: 1.6rem;
-  letter-spacing: 0.4em;
+  max-width: 13rem;
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: 0.45em;
+  /* Het laatste teken krijgt ook letter-spacing; opvullen houdt de cijfers optisch gecentreerd. */
+  padding-left: calc(14px + 0.45em);
   text-align: center;
 }
 
-.parent .pin-link-button {
-  justify-self: start;
+.parent-gate .pin-input {
+  max-width: 15rem;
+  min-height: 68px;
+  font-size: 2.1rem;
+  margin: 0 auto;
+  display: block;
+}
+
+.parent-shell .pin-link-button {
+  justify-self: center;
   min-width: 0;
-  padding: 0 4px;
+  min-height: 44px;
+  padding: 0 12px;
   background: none;
-  color: var(--color-primary-dark);
+  color: var(--grape-edge);
   box-shadow: none;
   text-decoration: underline;
   text-underline-offset: 3px;
+  font-size: 0.95rem;
 }
 
-.parent .pin-link-button:active {
+.parent-shell .pin-link-button:active {
   transform: none;
   box-shadow: none;
+}
+
+/* PIN-instellingen als kopje met kaart */
+.parent #parent-pin-title {
+  margin: 24px 0 8px;
+}
+
+.parent-gate .pin-actions {
+  flex-direction: column;
 }
 
 .pin-actions {
@@ -38,11 +60,15 @@
   flex: 1 1 12rem;
 }
 
+.pin-field .pin-input {
+  display: block;
+}
+
 /*
  * Tijdens het laden van de PIN staat de som al klaar (terugval), maar pas na een korte vertraging
  * zichtbaar: zo flitst de som niet in beeld als er een PIN blijkt te zijn.
  */
-.pin-gate-loading > :not(h1) {
+.pin-gate-loading .parent-gate-card > :not(h1):not(.parent-lock) {
   animation: pin-reveal 0.2s ease 0.4s both;
 }
 
@@ -57,7 +83,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pin-gate-loading > :not(h1) {
+  .pin-gate-loading .parent-gate-card > :not(h1):not(.parent-lock) {
     animation-duration: 0.01s;
   }
 }

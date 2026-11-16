@@ -1,5 +1,6 @@
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
 import type { ClothingItem } from '../domain/types'
+import { IconCamera, IconChildren, IconWash } from '../shared/icons'
 import { Thumb, itemLabel } from './shared'
 
 interface WardrobeProps {
@@ -13,9 +14,18 @@ interface WardrobeProps {
 
 export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChildren }: WardrobeProps) {
   return (
-    <section aria-labelledby="parent-wardrobe-title">
+    <section aria-labelledby="parent-wardrobe-title" className="parent-wardrobe">
+      <div className="parent-title-row">
+        <h2 id="parent-wardrobe-title">Kledingkast</h2>
+        <span className="parent-count">
+          {items.length}
+        </span>
+      </div>
       {hasChildren ? null : (
-        <div className="parent-card">
+        <div className="parent-card parent-notice">
+          <span className="parent-notice-icon" aria-hidden="true">
+            <IconChildren size={26} />
+          </span>
           <p>
             <strong>Nog geen kind aangemaakt.</strong> De kinderomgeving heeft minstens één kind nodig.
           </p>
@@ -24,14 +34,11 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
           </button>
         </div>
       )}
-      <button type="button" className="parent-add-button" onClick={onAdd}>
-        <span aria-hidden="true">📷</span> Kleding toevoegen
-      </button>
-      <h2 id="parent-wardrobe-title">
-        Kledingkast <span className="parent-count">({items.length})</span>
-      </h2>
       {items.length === 0 ? (
         <div className="parent-card parent-empty">
+          <span className="parent-empty-icon" aria-hidden="true">
+            <IconCamera size={34} />
+          </span>
           <p>
             <strong>Nog niets in de kledingkast.</strong>
           </p>
@@ -45,12 +52,15 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
           const inCategory = items.filter((item) => item.category === category)
           if (inCategory.length === 0) return null
           return (
-            <section key={category} className="parent-group" aria-label={CATEGORY_LABELS[category]}>
-              <h3>
-                <span aria-hidden="true">{CATEGORY_EMOJI[category]}</span> {CATEGORY_LABELS[category]}{' '}
-                <span className="parent-count">({inCategory.length})</span>
+            <section key={category} className="parent-shelf" aria-label={CATEGORY_LABELS[category]}>
+              <h3 className="parent-shelf-head">
+                <span className="parent-shelf-emoji" aria-hidden="true">
+                  {CATEGORY_EMOJI[category]}
+                </span>
+                {CATEGORY_LABELS[category]}
+                <span className="parent-count">{inCategory.length}</span>
               </h3>
-              <ul className="parent-grid">
+              <ul className="parent-shelf-row">
                 {inCategory.map((item) => (
                   <li key={item.id}>
                     <button
@@ -65,7 +75,12 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
                         {item.season !== 'all' ? (
                           <span className="parent-badge">{SEASON_LABELS[item.season]}</span>
                         ) : null}
-                        {!item.available ? <span className="parent-badge parent-badge-wash">In de was</span> : null}
+                        {!item.available ? (
+                          <span className="parent-badge parent-badge-wash">
+                            <IconWash size={11} />
+                            In de was
+                          </span>
+                        ) : null}
                         {item.excludedIds.length > 0 ? (
                           <span className="parent-badge parent-badge-no">🚫 {item.excludedIds.length}</span>
                         ) : null}
@@ -78,6 +93,12 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
           )
         })
       )}
+      <button type="button" className="parent-fab" onClick={onAdd}>
+        <span className="parent-fab-icon" aria-hidden="true">
+          <IconCamera size={22} />
+        </span>
+        <span className="parent-fab-label">Kleding toevoegen</span>
+      </button>
     </section>
   )
 }

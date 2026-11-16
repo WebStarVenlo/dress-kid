@@ -103,6 +103,55 @@ describe('kinderen beheren', () => {
     expect(child?.sizes.bottom).toEqual(['104', '110'])
   })
 
+  it('kiest bij het toevoegen een dierfiguur uit de kiezer', async () => {
+    await renderUnlocked()
+    await openChildren()
+    fireEvent.click(screen.getByRole('button', { name: 'Kind toevoegen' }))
+    const group = screen.getByRole('radiogroup', { name: 'Dierfiguur' })
+    // 12 dieren plus "Geen"; zonder keuze staat "Geen" aan.
+    expect(within(group).getAllByRole('radio')).toHaveLength(13)
+    expect(within(group).getByRole('radio', { name: 'Geen' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.change(screen.getByLabelText('Naam'), { target: { value: 'Noor' } })
+    fireEvent.click(within(group).getByRole('radio', { name: 'Konijn' }))
+    expect(within(group).getByRole('radio', { name: 'Konijn' })).toHaveAttribute('aria-checked', 'true')
+    expect(within(group).getByRole('radio', { name: 'Geen' })).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await screen.findByText('Noor')
+    const [child] = await store.listChildren()
+    expect(child?.avatar).toBe('bunny')
+  })
+
+  it('wijzigt het dierfiguur en wist het met "Geen"', async () => {
+    await store.addChild({ name: 'Sam', color: '#112233', avatar: 'fox', sizes: {} })
+    await renderUnlocked()
+    await openChildren()
+    fireEvent.click(await screen.findByRole('button', { name: 'Wijzig Sam' }))
+    // De bestaande keuze is voorgeselecteerd.
+    expect(screen.getByRole('radio', { name: 'Vos' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(screen.getByRole('radio', { name: 'Uil' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await screen.findByRole('button', { name: 'Wijzig Sam' })
+    expect((await store.listChildren())[0]?.avatar).toBe('owl')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wijzig Sam' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Geen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await screen.findByRole('button', { name: 'Wijzig Sam' })
+    await waitFor(async () => expect((await store.listChildren())[0]?.avatar).toBeUndefined())
+  })
+
+  it('toont het dierfiguur in de lijst, en anders de beginletter', async () => {
+    await store.addChild({ name: 'Noor', color: '#ff7eb6', avatar: 'bunny', sizes: {} })
+    await store.addChild({ name: 'Sam', color: '#112233', sizes: {} })
+    await renderUnlocked()
+    await openChildren()
+    const noor = (await screen.findByText('Noor')).closest('li') as HTMLElement
+    expect(noor.querySelector('.parent-avatar svg')).not.toBeNull()
+    const sam = screen.getByText('Sam').closest('li') as HTMLElement
+    expect(sam.querySelector('.parent-avatar svg')).toBeNull()
+    expect(sam.querySelector('.parent-avatar-initial')).toHaveTextContent('S')
+  })
+
   it('verwijdert pas na bevestiging', async () => {
     await store.addChild({ name: 'Sam', color: '#112233', sizes: {} })
     await renderUnlocked()
