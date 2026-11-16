@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   chooseItem,
   conflictingCategories,
-  isOutfitComplete,
+  isOutfitReady,
   pruneOutfit,
   selectableItems,
   todayKey,
@@ -29,6 +29,11 @@ const BODY_ORDER: readonly Category[] = [
 ]
 
 type Screen = 'choose' | 'done'
+
+/** Hoe lang het kind de "ongedaan maken"-knop na Opnieuw beginnen krijgt. */
+const UNDO_MS = 5000
+/** Hoe vaak we controleren of het inmiddels een nieuwe dag is. */
+const DAY_CHECK_MS = 60_000
 
 function itemLabel(item: ClothingItem): string {
   return item.name ?? CATEGORY_LABELS[item.category]
@@ -73,43 +78,77 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
   const [outfitReady, setOutfitReady] = useState(false)
   const [screen, setScreen] = useState<Screen>('choose')
   const [active, setActive] = useState<Category | undefined>(undefined)
-  const loadedRef = useRef(false)
+  // De dag (YYYY-MM-DD) waarvoor de outfit geladen is of wordt.
+  const [day, setDay] = useState(() => todayKey())
+  // De outfit van vóór "Opnieuw beginnen", een paar seconden lang terug te halen.
+  const [undoOutfit, setUndoOutfit] = useState<Outfit | undefined>(undefined)
+  const loadedDayRef = useRef<string | undefined>(undefined)
 
-  // Eenmalig: de opgeslagen outfit van vandaag ophalen en opruimen.
+  // De opgeslagen outfit van `day` ophalen en opruimen; opnieuw als de dag verandert.
   useEffect(() => {
-    if (loading || error !== undefined || loadedRef.current) return undefined
+    if (loading || error !== undefined || loadedDayRef.current === day) return undefined
     let cancelled = false
     void (async () => {
       let saved: Outfit = {}
       try {
-        saved = (await activeStore.getOutfit(todayKey()))?.outfit ?? {}
+        saved = (await activeStore.getOutfit(day))?.outfit ?? {}
       } catch (e) {
         console.error(e)
       }
       if (cancelled) return
-      loadedRef.current = true
+      loadedDayRef.current = day
       const pruned = pruneOutfit(items, settings, saved)
       setOutfit(pruned)
-      if (isOutfitComplete(pruned)) setScreen('done')
+      setScreen(isOutfitReady(items, settings, pruned) ? 'done' : 'choose')
+      setActive(undefined)
+      setUndoOutfit(undefined)
       setOutfitReady(true)
     })()
     return () => {
       cancelled = true
     }
-  }, [loading, error, items, settings, activeStore])
+  }, [loading, error, items, settings, activeStore, day])
+
+  // Blijft de app overnacht open, dan beginnen we de nieuwe dag met een lege outfit.
+  useEffect(() => {
+    const check = () => {
+      const now = todayKey()
+      if (now === day) return
+      setOutfitReady(false)
+      setDay(now)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') check()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', check)
+    const timer = window.setInterval(check, DAY_CHECK_MS)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', check)
+      window.clearInterval(timer)
+    }
+  }, [day])
+
+  // De ongedaan-maken-knop verdwijnt na een paar seconden.
+  useEffect(() => {
+    if (undoOutfit === undefined) return undefined
+    const timer = window.setTimeout(() => setUndoOutfit(undefined), UNDO_MS)
+    return () => window.clearTimeout(timer)
+  }, [undoOutfit])
 
   const update = useCallback(
     (next: Outfit) => {
       setOutfit(next)
-      activeStore.saveOutfit(todayKey(), next).catch((e: unknown) => console.error(e))
+      activeStore.saveOutfit(day, next).catch((e: unknown) => console.error(e))
     },
-    [activeStore],
+    [activeStore, day],
   )
 
   const categories = visibleCategories(items, settings)
   const current: Category | undefined =
     active !== undefined && categories.includes(active) ? active : categories[0]
-  const complete = isOutfitComplete(outfit)
+  const complete = isOutfitReady(items, settings, outfit)
 
   const byId = new Map(items.map((i) => [i.id, i]))
   const chosen: ClothingItem[] = BODY_ORDER.flatMap((category) => {
@@ -135,6 +174,7 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
 
   function handleChoose(item: ClothingItem) {
     const wasChosen = outfit[item.category] === item.id
+    setUndoOutfit(undefined)
     const next = chooseItem(items, settings, outfit, item)
     update(next)
     if (!wasChosen && next[item.category] === item.id) {
@@ -144,15 +184,33 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
   }
 
   function restart() {
+    setUndoOutfit(outfit)
     update({})
     setScreen('choose')
     setActive(categories[0])
+  }
+
+  function undoRestart() {
+    if (undoOutfit === undefined) return
+    update(undoOutfit)
+    setUndoOutfit(undefined)
   }
 
   const header = (title: string) => (
     <header className="kid-header">
       <h1 className="kid-title">{title}</h1>
       <div className="kid-header__actions">
+        {outfitReady && undoOutfit !== undefined ? (
+          <button
+            type="button"
+            className="kid-icon-btn kid-icon-btn--undo"
+            aria-label="Ongedaan maken"
+            title="Ongedaan maken"
+            onClick={undoRestart}
+          >
+            <span aria-hidden="true">↩️</span>
+          </button>
+        ) : null}
         {outfitReady && Object.keys(outfit).length > 0 ? (
           <button
             type="button"
@@ -207,8 +265,17 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
           <div className="kid-empty__emoji" aria-hidden="true">
             🧺
           </div>
-          <p>De kleerkast is nog leeg.</p>
-          <p>Een grote mens kan er kleren in doen.</p>
+          {items.length === 0 ? (
+            <>
+              <p>De kleerkast is nog leeg.</p>
+              <p>Een grote mens kan er kleren in doen.</p>
+            </>
+          ) : (
+            <>
+              <p>Er zijn nu geen kleren om uit te kiezen.</p>
+              <p>Een grote mens kan kijken naar het seizoen of naar kleren die in de was zijn.</p>
+            </>
+          )}
           <Link className="button kid-big-btn" to="/ouder">
             <span aria-hidden="true">⚙️</span> Naar de ouders
           </Link>
@@ -246,7 +313,7 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
     <main className="kid-app">
       {header('Wat trek je vandaag aan?')}
 
-      <nav className="kid-tabs" aria-label="Soort kleding">
+      <div className="kid-tabs" role="tablist" aria-label="Soort kleding">
         {categories.map((category) => {
           const has = outfit[category] !== undefined
           const dimmed = isDimmed(category, outfit)
@@ -262,8 +329,11 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
             <button
               key={category}
               type="button"
+              id={`kid-tab-${category}`}
+              role="tab"
               className={cls}
-              aria-pressed={category === current}
+              aria-selected={category === current}
+              aria-controls="kid-panel"
               aria-label={`${CATEGORY_LABELS[category]}${has ? ' (gekozen)' : ''}`}
               onClick={() => setActive(category)}
             >
@@ -281,9 +351,14 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
             </button>
           )
         })}
-      </nav>
+      </div>
 
-      <section className="kid-choices" aria-label={current ? CATEGORY_LABELS[current] : undefined}>
+      <section
+        className="kid-choices"
+        id="kid-panel"
+        role="tabpanel"
+        aria-labelledby={current ? `kid-tab-${current}` : undefined}
+      >
         {dimmedCurrent ? (
           <p className="kid-note">
             <span aria-hidden="true">👗</span> Je hebt een jurk gekozen. Kies hier iets om te wisselen.

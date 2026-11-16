@@ -60,7 +60,8 @@ function chosenWearable(
 
 /**
  * Kledingstukken uit `category` waar het kind nu uit kan kiezen: draagbaar en passend bij
- * alles wat in de ándere categorieën gekozen is. Gesorteerd op createdAt.
+ * alles wat in de ándere categorieën gekozen is (behalve botsende vakken, die worden bij het
+ * kiezen vervangen). Gesorteerd op createdAt.
  */
 export function selectableItems(
   items: readonly ClothingItem[],
@@ -69,8 +70,10 @@ export function selectableItems(
   category: Category,
 ): ClothingItem[] {
   const wearable = wearableItems(items, settings)
+  // Keuzes in botsende vakken (jurk vs. shirt/broek) tellen niet mee: kiezen vervangt ze toch.
+  const replaced = conflictingCategories(category)
   const others = chosenWearable(wearable, outfit)
-    .filter((chosen) => chosen.category !== category)
+    .filter((chosen) => chosen.category !== category && !replaced.includes(chosen.category))
     .map((chosen) => chosen.item)
   return sortByCreatedAt(
     wearable.filter(
@@ -140,6 +143,23 @@ export function visibleCategories(items: readonly ClothingItem[], settings: Sett
 /** Is de outfit compleet? (shirt én broek/rok) of een jurk. */
 export function isOutfitComplete(outfit: Outfit): boolean {
   return Boolean((outfit.top && outfit.bottom) || outfit.dress)
+}
+
+/**
+ * Is de outfit klaar, gemeten aan wat er nu echt draagbaar is? Klaar als er een jurk is, of als
+ * elk van shirt en broek/rok dat te kiezen valt gekozen is. Er moet minstens één kledingstuk
+ * gekozen zijn. Zo blijft het kind niet hangen als er bijv. geen enkele broek draagbaar is.
+ */
+export function isOutfitReady(items: readonly ClothingItem[], settings: Settings, outfit: Outfit): boolean {
+  const wearable = wearableItems(items, settings)
+  const chosen = chosenWearable(wearable, outfit)
+  if (chosen.length === 0) return false
+  const has = (category: Category) => chosen.some((c) => c.category === category)
+  if (has('dress')) return true
+  const missing = (['top', 'bottom'] as const).some(
+    (category) => !has(category) && selectableItems(items, settings, outfit, category).length > 0,
+  )
+  return !missing
 }
 
 /** Lokale datum als YYYY-MM-DD. */

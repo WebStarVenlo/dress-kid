@@ -37,7 +37,7 @@ export const CATEGORY_EMOJI: Record<Category, string> = {
   top: '👕',
   bottom: '👖',
   dress: '👗',
-  sweater: '🧥',
+  sweater: '👚',
   socks: '🧦',
   shoes: '👟',
   jacket: '🧥',

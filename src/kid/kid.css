@@ -58,6 +58,13 @@
   background: var(--color-yellow);
 }
 
+.kid-icon-btn--undo {
+  min-width: 72px;
+  min-height: 72px;
+  font-size: 2.2rem;
+  background: var(--color-accent);
+}
+
 .kid-parent-link {
   background: transparent;
   opacity: 0.45;

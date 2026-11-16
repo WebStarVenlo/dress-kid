@@ -4,6 +4,7 @@ import {
   isCompatible,
   isInSeason,
   isOutfitComplete,
+  isOutfitReady,
   pruneOutfit,
   selectableItems,
   todayKey,
@@ -112,6 +113,29 @@ describe('selectableItems', () => {
     ]
     expect(selectableItems(items, ALL, { bottom: 'b1' }, 'top').map((i) => i.id)).toEqual(['t1'])
     expect(selectableItems(items, ALL, { bottom: 'b1', shoes: 's1' }, 'top')).toEqual([])
+  })
+
+  it('houdt geen rekening met keuzes in botsende vakken (jurk bij het bekijken van shirts)', () => {
+    const items = [
+      item('d1', 'dress'),
+      item('t1', 'top', { excludedIds: ['d1'] }),
+      item('t2', 'top'),
+      item('b1', 'bottom', { excludedIds: ['d1'] }),
+    ]
+    expect(selectableItems(items, ALL, { dress: 'd1' }, 'top').map((i) => i.id)).toEqual(['t1', 't2'])
+    expect(selectableItems(items, ALL, { dress: 'd1' }, 'bottom').map((i) => i.id)).toEqual(['b1'])
+    // Een shirt die niet bij de gekozen broek past blijft wel verborgen.
+    expect(selectableItems(items, ALL, { bottom: 'b1', dress: 'd1' }, 'dress').map((i) => i.id)).toEqual(['d1'])
+  })
+
+  it('geeft alleen keuzes die chooseItem tot een consistente outfit maken (jurk gekozen, shirts bekijken)', () => {
+    const items = [item('d1', 'dress'), item('t1', 'top', { excludedIds: ['d1'] }), item('s1', 'shoes')]
+    const outfit = { dress: 'd1', shoes: 's1' }
+    for (const choice of selectableItems(items, ALL, outfit, 'top')) {
+      const next = chooseItem(items, ALL, outfit, choice)
+      expect(next).toEqual({ top: 't1', shoes: 's1' })
+      expect(pruneOutfit(items, ALL, next)).toEqual(next)
+    }
   })
 
   it('negeert de keuze in de eigen categorie', () => {
@@ -250,6 +274,49 @@ describe('isOutfitComplete', () => {
     expect(isOutfitComplete({ top: 'a' })).toBe(false)
     expect(isOutfitComplete({ bottom: 'b', shoes: 's' })).toBe(false)
     expect(isOutfitComplete({})).toBe(false)
+  })
+})
+
+describe('isOutfitReady', () => {
+  const top = item('t', 'top')
+  const bottom = item('b', 'bottom')
+  const dress = item('d', 'dress')
+  const shoes = item('s', 'shoes')
+
+  it('is niet klaar zonder keuze, ook als niets draagbaar is', () => {
+    expect(isOutfitReady([top, bottom], ALL, {})).toBe(false)
+    expect(isOutfitReady([], ALL, {})).toBe(false)
+    expect(isOutfitReady([item('t', 'top', { available: false })], ALL, {})).toBe(false)
+  })
+
+  it('is klaar met een jurk of met shirt en broek', () => {
+    expect(isOutfitReady([top, bottom, dress], ALL, { dress: 'd' })).toBe(true)
+    expect(isOutfitReady([top, bottom], ALL, { top: 't', bottom: 'b' })).toBe(true)
+  })
+
+  it('is niet klaar als er nog een shirt of broek te kiezen valt', () => {
+    expect(isOutfitReady([top, bottom], ALL, { top: 't' })).toBe(false)
+    expect(isOutfitReady([top, bottom, shoes], ALL, { bottom: 'b', shoes: 's' })).toBe(false)
+  })
+
+  it('is klaar als er geen enkele broek draagbaar is', () => {
+    const wash = item('b', 'bottom', { available: false })
+    expect(isOutfitReady([top, wash], ALL, { top: 't' })).toBe(true)
+    const winter = item('b', 'bottom', { season: 'winter' })
+    expect(isOutfitReady([top, winter], SUMMER, { top: 't' })).toBe(true)
+  })
+
+  it('is klaar met alleen schoenen als er geen shirt of broek draagbaar is', () => {
+    expect(isOutfitReady([shoes], ALL, { shoes: 's' })).toBe(true)
+  })
+
+  it('is klaar als de rest niet meer past bij wat gekozen is', () => {
+    const picky = item('b', 'bottom', { excludedIds: ['t'] })
+    expect(isOutfitReady([top, picky], ALL, { top: 't' })).toBe(true)
+  })
+
+  it('negeert verouderde id’s in de outfit', () => {
+    expect(isOutfitReady([top], ALL, { bottom: 'weg' })).toBe(false)
   })
 })
 
