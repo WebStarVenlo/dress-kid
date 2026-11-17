@@ -801,17 +801,18 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
 
     async markOutfitCompleted(childId, date) {
       const tx = (await db()).transaction(['children', 'outfits'], 'readwrite')
-      await runInTx(tx, async () => {
+      return runInTx(tx, async () => {
         if (!(await tx.objectStore('children').get(childId))) throw new Error(CHILD_NOT_FOUND)
         const outfits = tx.objectStore('outfits')
         const existing = await outfits.get([childId, date])
-        if (isCompletedAt(existing?.completedAt)) return
+        if (isCompletedAt(existing?.completedAt)) return false
         await outfits.put({
           childId,
           date,
           outfit: existing ? normalizeOutfit(existing.outfit) : {},
           completedAt: Date.now(),
         })
+        return true
       })
     },
 

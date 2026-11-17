@@ -117,6 +117,26 @@ describe('KidApp: geluid en voorlezen', () => {
     await waitFor(() => expect(playSound).toHaveBeenLastCalledWith('sticker'), { timeout: 2500 })
   })
 
+  it('speelt de sticker-animatie en -pling niet opnieuw bij nogmaals Klaar op dezelfde dag', async () => {
+    const store = await newStore()
+    await add(store, 'top', 'Rood shirt')
+    const { container } = renderKid(store)
+    click(await screen.findByRole('button', { name: 'Rood shirt' }))
+    click(screen.getByRole('button', { name: /Klaar/ }))
+    expect(await screen.findByText('Je hebt 1 sticker!')).toBeInTheDocument()
+    expect(container.querySelector('.kid-sticker--new')).not.toBeNull()
+    await waitFor(() => expect(playSound).toHaveBeenLastCalledWith('sticker'), { timeout: 2500 })
+
+    click(screen.getByRole('button', { name: 'Veranderen' }))
+    vi.mocked(playSound).mockClear()
+    click(screen.getByRole('button', { name: /Klaar/ }))
+    expect(await screen.findByText('Je hebt 1 sticker!')).toBeInTheDocument()
+    expect(container.querySelector('.kid-sticker--new')).toBeNull()
+    // Ruim langer dan de vertraging van de pling wachten: er mag niets meer klinken.
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    expect(playSound).not.toHaveBeenCalledWith('sticker')
+  })
+
   it('begroet het kind bij het kiezen van een profiel', async () => {
     const store = await newStore(['Sam', 'Noor'])
     renderKid(store)

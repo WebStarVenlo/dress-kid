@@ -59,8 +59,9 @@ export interface WardrobeStore {
    * maar alleen als dat nog niet gebeurd was: de eerste tijd blijft staan (idempotent). Bestaat er
    * voor die dag nog geen outfit, dan wordt er een met een lege outfit aangemaakt. Gooit als het
    * kind niet (meer) bestaat.
+   * Geeft `true` als `completedAt` nu pas gezet is (een nieuwe sticker), `false` als de dag al afgerond was.
    */
-  markOutfitCompleted(childId: string, date: string): Promise<void>;
+  markOutfitCompleted(childId: string, date: string): Promise<boolean>;
   /** Stickerboek: het aantal afgeronde dagen (outfits met `completedAt`) van dit kind; 0 bij een onbekend kind. */
   countCompletedDays(childId: string): Promise<number>;
 

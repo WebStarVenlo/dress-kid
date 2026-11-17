@@ -44,6 +44,7 @@ beforeAll(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   window.localStorage.clear()
 })
 
@@ -250,6 +251,60 @@ describe('KidApp', () => {
       vi.advanceTimersByTime(5000)
     })
     expect(screen.queryByRole('button', { name: 'Ongedaan maken' })).not.toBeInTheDocument()
+  })
+
+  describe('doorschuiven naar de volgende soort', () => {
+    async function setup() {
+      const store = await newStore()
+      await add(store, 'top', 'Rood shirt')
+      await add(store, 'bottom', 'Blauwe broek')
+      renderKid(store)
+      const shirt = await screen.findByRole('button', { name: 'Rood shirt' })
+      return { shirt }
+    }
+    // Na een keuze krijgt het tabje er een vinkje bij in zijn naam, dus op een deel van de naam zoeken.
+    const selected = (name: string) => screen.getByRole('tab', { name: new RegExp(name) }).getAttribute('aria-selected')
+
+    it('schuift pas na 650 ms door', async () => {
+      const { shirt } = await setup()
+      // Pas nu de timers vervalsen: het laden (IndexedDB) is dan al klaar.
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      click(shirt)
+      expect(selected('Shirt')).toBe('true')
+      act(() => {
+        vi.advanceTimersByTime(649)
+      })
+      expect(selected('Shirt')).toBe('true')
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(selected('Broek of rok')).toBe('true')
+      expect(selected('Shirt')).toBe('false')
+    })
+
+    it('schuift meteen door bij verminderde beweging', async () => {
+      const { shirt } = await setup()
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+      click(shirt)
+      expect(selected('Broek of rok')).toBe('true')
+    })
+
+    it('een tik op een tab tijdens het wachten annuleert het doorschuiven', async () => {
+      const { shirt } = await setup()
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      click(shirt)
+      click(screen.getByRole('tab', { name: /Shirt/ }))
+      act(() => {
+        vi.advanceTimersByTime(2000)
+      })
+      expect(selected('Shirt')).toBe('true')
+      expect(selected('Broek of rok')).toBe('false')
+    })
   })
 
   describe('stickerboek', () => {

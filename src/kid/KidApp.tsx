@@ -152,9 +152,12 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
                 className="kid-profile"
                 style={{ '--kid-color': c.color } as CSSProperties}
                 onClick={() => {
-                  playSound('pick')
-                  vibrate()
-                  speak(`Hoi ${c.name}! Wat trek je vandaag aan?`)
+                  // Zolang de geluidsinstelling van de ouder nog niet geladen is, blijft het stil.
+                  if (settings !== undefined) {
+                    playSound('pick')
+                    vibrate()
+                    speak(`Hoi ${c.name}! Wat trek je vandaag aan?`)
+                  }
                   writeActiveChild(c.id)
                   setChosenId(c.id)
                 }}
@@ -396,11 +399,13 @@ function KidDay({
     vibrate(40)
     speak(`Super, ${child.name}!`)
     setScreen('done')
-    setFreshSticker(true)
+    setFreshSticker(false)
     setStickers(undefined)
     setMarking(true)
     activeStore
       .markOutfitCompleted(child.id, day)
+      // Alleen een echt nieuwe sticker (eerste Klaar van de dag) komt met animatie en geluid.
+      .then((isNew) => setFreshSticker(isNew))
       .catch((e: unknown) => console.error(e))
       .finally(() => setMarking(false))
   }

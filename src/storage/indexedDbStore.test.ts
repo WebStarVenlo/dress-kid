@@ -993,9 +993,9 @@ describe('createIndexedDbStore: stickerboek', () => {
     const k = await store.addChild(newChild())
     await store.saveOutfit(k.id, '2026-04-01', { top: 'x' })
     vi.spyOn(Date, 'now').mockReturnValue(1_000)
-    await store.markOutfitCompleted(k.id, '2026-04-01')
+    expect(await store.markOutfitCompleted(k.id, '2026-04-01')).toBe(true)
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
-    await store.markOutfitCompleted(k.id, '2026-04-01')
+    expect(await store.markOutfitCompleted(k.id, '2026-04-01')).toBe(false)
     expect(await store.getOutfit(k.id, '2026-04-01')).toEqual({
       childId: k.id,
       date: '2026-04-01',
