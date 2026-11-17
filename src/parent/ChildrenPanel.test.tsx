@@ -130,13 +130,17 @@ describe('kinderen beheren', () => {
     expect(screen.getByRole('radio', { name: 'Vos' })).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(screen.getByRole('radio', { name: 'Uil' }))
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
-    await screen.findByRole('button', { name: 'Wijzig Sam' })
+    // De lijst met "Wijzig"-knoppen staat ook zichtbaar terwijl het formulier open is; pas als het formulier
+    // dicht is, is het opslaan (inclusief herladen) klaar.
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Kind wijzigen' })).not.toBeInTheDocument())
     expect((await store.listChildren())[0]?.avatar).toBe('owl')
 
     fireEvent.click(screen.getByRole('button', { name: 'Wijzig Sam' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Geen' }))
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
-    await screen.findByRole('button', { name: 'Wijzig Sam' })
+    // De lijst met "Wijzig"-knoppen staat ook zichtbaar terwijl het formulier open is; pas als het formulier
+    // dicht is, is het opslaan (inclusief herladen) klaar.
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Kind wijzigen' })).not.toBeInTheDocument())
     await waitFor(async () => expect((await store.listChildren())[0]?.avatar).toBeUndefined())
   })
 
