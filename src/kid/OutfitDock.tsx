@@ -1,11 +1,12 @@
 import type { CSSProperties, Ref } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CATEGORY_EMOJI } from '../domain/types'
 import type { Category, ClothingItem, Outfit } from '../domain/types'
 import { IconCheck } from '../shared/icons'
 import { Doll, Photo } from './KidArt'
 import { itemLabel } from './kidUtils'
 
-/** Voortgangsbalk: één stukje per soort kleding die nog meetelt, mint als hij gekozen is. */
+/** Progress bar: one segment per kind of clothing that still counts, mint when chosen. */
 export function ProgressBar({ slots, outfit }: { slots: readonly Category[]; outfit: Outfit }) {
   if (slots.length === 0) return null
   const filled = slots.filter((category) => outfit[category] !== undefined).length
@@ -19,9 +20,9 @@ export function ProgressBar({ slots, outfit }: { slots: readonly Category[]; out
 }
 
 /**
- * De paspop onderaan (of als kolom op brede schermen): het figuurtje, een vakje per soort kleding
- * en de Klaar-knop. Die knop bestaat pas als de outfit compleet is; daarvoor staat er een grijs
- * vinkje (alleen versiering).
+ * The dress-up doll at the bottom (or as a column on wide screens): the figure, a slot per kind
+ * of clothing and the Ready button. The button only exists once the outfit is complete; before
+ * that there is a grey check mark (decoration only).
  */
 export function OutfitDock({
   slots,
@@ -38,12 +39,13 @@ export function OutfitDock({
   onReady: () => void
   ref?: Ref<HTMLDivElement>
 }) {
+  const { t } = useTranslation('kid')
   return (
     <div className={`kid-dock${complete ? ' kid-dock--complete' : ''}`} ref={ref}>
       <div className="kid-dock__doll">
         <Doll outfit={outfit} slots={slots} />
       </div>
-      <ul className="kid-slots" aria-label="Jouw outfit">
+      <ul className="kid-slots" aria-label={t('dock.outfit')}>
         {slots.map((category, i) => {
           const id = outfit[category]
           const item = id === undefined ? undefined : byId.get(id)
@@ -63,7 +65,7 @@ export function OutfitDock({
       {complete ? (
         <button type="button" className="kid-go kid-go--ready" onClick={onReady}>
           <IconCheck className="kid-go__icon" size={34} />
-          <span className="kid-go__label">Klaar!</span>
+          <span className="kid-go__label">{t('dock.ready')}</span>
         </button>
       ) : (
         <span className="kid-go kid-go--waiting" aria-hidden="true">

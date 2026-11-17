@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { stickersOn } from '../domain/types'
 import type { Child, ClothingItem } from '../domain/types'
 import { AnimalAvatar, AVATAR_COLORS } from '../shared/AnimalAvatar'
@@ -9,17 +10,17 @@ import { Confetti } from './Decor'
 import { ChildAvatar, PartyStar, Photo } from './KidArt'
 import { itemLabel, prefersReducedMotion } from './kidUtils'
 
-/** Zoveel stickers passen op één bladzijde van het stickerboek. */
+/** This many stickers fit on one page of the sticker book. */
 const PAGE = 7
 const MAX_SHOWN = PAGE * 2
-/** Wanneer de nieuwe sticker op de bladzijde ploft (zie .kid-sticker--new in kid.css). */
+/** When the new sticker plops onto the page (see .kid-sticker--new in kid.css). */
 const STICKER_DELAY_MS = 1300
 
 const TILTS = [-6, 4, -3, 6, -5, 3]
 
 /**
- * Het feestscherm: confetti, het dier van het kind dat stuitert, drie sterren, de gekozen kleding
- * als stickers en het stickerboek met het aantal afgeronde dagen.
+ * The celebration screen: confetti, the child's bouncing animal, three stars, the chosen clothes
+ * as stickers and the sticker book with the number of completed days.
  */
 export function Celebration({
   child,
@@ -31,16 +32,17 @@ export function Celebration({
 }: {
   child: Child
   chosen: readonly ClothingItem[]
-  /** Aantal verdiende stickers; undefined zolang het nog geladen wordt. */
+  /** Number of stickers earned; undefined while still loading. */
   stickers: number | undefined
-  /** True als de sticker zojuist (met Klaar) verdiend is: die komt dan met een sprongetje. */
+  /** True if the sticker was just earned (by pressing Ready): it then arrives with a hop. */
   fresh: boolean
-  /** Bijv. de (bescheiden) knop Opnieuw beginnen, naast Veranderen. */
+  /** E.g. the (modest) Start over button, next to Change. */
   extraAction?: ReactNode
   onChange: () => void
 }) {
+  const { t } = useTranslation('kid')
   const withStickers = stickersOn(child)
-  // Het "pling" van de nieuwe sticker valt samen met de animatie.
+  // The "ping" of the new sticker coincides with the animation.
   useEffect(() => {
     if (!withStickers || !fresh || stickers === undefined || stickers === 0) return undefined
     const timer = window.setTimeout(() => playSound('sticker'), prefersReducedMotion() ? 0 : STICKER_DELAY_MS)
@@ -54,7 +56,7 @@ export function Celebration({
         <div className="kid-party__avatar">
           <ChildAvatar child={child} className="kid-avatar--huge" />
         </div>
-        <p className="kid-party__cheer">Super, {child.name}!</p>
+        <p className="kid-party__cheer">{t('celebration.cheer', { name: child.name })}</p>
         <div className="kid-stars" aria-hidden="true">
           <PartyStar className="kid-star" />
           <PartyStar className="kid-star kid-star--big" />
@@ -81,7 +83,7 @@ export function Celebration({
       <div className="kid-party__actions">
         <button type="button" className="kid-big-btn kid-party__change" onClick={onChange}>
           <IconArrowLeft size={30} />
-          Veranderen
+          {t('celebration.change')}
         </button>
         {extraAction}
       </div>
@@ -90,13 +92,14 @@ export function Celebration({
 }
 
 function StickerBook({ child, count, fresh }: { child: Child; count: number; fresh: boolean }) {
+  const { t } = useTranslation('kid')
   const shown = Math.min(count, MAX_SHOWN)
   const spots = count > PAGE ? MAX_SHOWN : PAGE
   return (
     <section className="kid-book">
       <p className="kid-book__title">
         <IconSticker size={30} className="kid-book__icon" />
-        <span>{`Je hebt ${count} ${count === 1 ? 'sticker' : 'stickers'}!`}</span>
+        <span>{t('celebration.stickers', { count })}</span>
       </p>
       <ol className="kid-book__page" aria-hidden="true">
         {Array.from({ length: spots }, (_, i) => {

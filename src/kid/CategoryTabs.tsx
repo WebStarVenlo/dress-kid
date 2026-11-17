@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
 import type { Category, Outfit } from '../domain/types'
 import { IconCheck } from '../shared/icons'
 
 /**
- * De tabbladen met soorten kleding: grote vierkante tegels met alleen het plaatje. De naam is de
- * toegankelijke naam. Past niet alles, dan vervaagt de rand aan de kant waar nog meer zit.
+ * The tabs for the kinds of clothing: big square tiles showing only the picture. The name is the
+ * accessible name. If not everything fits, the edge fades on the side where there is more.
  */
 export function CategoryTabs({
   categories,
@@ -20,9 +21,10 @@ export function CategoryTabs({
   isDimmed: (category: Category) => boolean
   onSelect: (category: Category) => void
 }) {
+  const { t } = useTranslation('kid')
   const listRef = useRef<HTMLDivElement>(null)
 
-  // Vervaagde randen bijhouden zonder React-state: alleen data-attributen op de lijst.
+  // Track the faded edges without React state: only data attributes on the list.
   useEffect(() => {
     const list = listRef.current
     if (!list) return undefined
@@ -43,7 +45,7 @@ export function CategoryTabs({
     }
   }, [categories.length])
 
-  // Het actieve tabblad in beeld schuiven, met wat ruimte zodat de buren zichtbaar blijven.
+  // Scroll the active tab into view, leaving some room so its neighbours stay visible.
   useEffect(() => {
     const list = listRef.current
     const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]')
@@ -56,7 +58,7 @@ export function CategoryTabs({
   }, [current])
 
   return (
-    <div className="kid-tabs" role="tablist" aria-label="Soort kleding" ref={listRef}>
+    <div className="kid-tabs" role="tablist" aria-label={t('tabs.label')} ref={listRef}>
       {categories.map((category) => {
         const has = outfit[category] !== undefined
         const dimmed = isDimmed(category)
@@ -77,7 +79,7 @@ export function CategoryTabs({
             className={cls}
             aria-selected={category === current}
             aria-controls="kid-panel"
-            aria-label={`${CATEGORY_LABELS[category]}${has ? ' (gekozen)' : ''}`}
+            aria-label={has ? t('tabs.chosen', { label: CATEGORY_LABELS[category] }) : CATEGORY_LABELS[category]}
             onClick={() => onSelect(category)}
           >
             <span className="kid-tab__emoji" aria-hidden="true">

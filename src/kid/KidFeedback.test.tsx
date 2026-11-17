@@ -6,7 +6,7 @@ import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 import KidApp from './KidApp'
 
-// Geluid en spraak nabootsen: in jsdom bestaan ze niet, en we willen zien wát er gezegd wordt.
+// Mock sound and speech: they do not exist in jsdom, and we want to see what is said.
 vi.mock('../shared/feedback', () => ({
   canSpeak: vi.fn(() => true),
   speak: vi.fn(),
@@ -146,7 +146,7 @@ describe('KidApp: geluid en voorlezen', () => {
     click(screen.getByRole('button', { name: /Klaar/ }))
     expect(await screen.findByText('Je hebt 1 sticker!')).toBeInTheDocument()
     expect(container.querySelector('.kid-sticker--new')).toBeNull()
-    // Ruim langer dan de vertraging van de pling wachten: er mag niets meer klinken.
+    // Wait well beyond the ping's delay: nothing may sound any more.
     await new Promise((resolve) => setTimeout(resolve, 1500))
     expect(playSound).not.toHaveBeenCalledWith('sticker')
   })

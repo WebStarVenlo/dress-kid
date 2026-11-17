@@ -1,1 +1,57 @@
-{}
+{
+  "header": {
+    "speak": "Voorlezen",
+    "parents": "Voor ouders"
+  },
+  "tabs": {
+    "label": "Soort kleding",
+    "chosen": "{{label}} (gekozen)"
+  },
+  "celebration": {
+    "cheer": "Super, {{name}}!",
+    "change": "Veranderen",
+    "stickers_one": "Je hebt {{count}} sticker!",
+    "stickers_other": "Je hebt {{count}} stickers!"
+  },
+  "dock": {
+    "outfit": "Jouw outfit",
+    "ready": "Klaar!"
+  },
+  "layout": {
+    "toParents": "Naar de ouders",
+    "retry": "Opnieuw proberen"
+  },
+  "questions": {
+    "top": "Welk shirt wil je?",
+    "bottom": "Welke broek of rok?",
+    "dress": "Welke jurk?",
+    "sweater": "Welke trui of welk vest?",
+    "socks": "Welke sokken?",
+    "shoes": "Welke schoenen?",
+    "jacket": "Welke jas?",
+    "accessory": "Wil je een extraatje?"
+  },
+  "app": {
+    "title": "Wat trek je vandaag aan?",
+    "loading": "Even wachten…",
+    "noChildrenLead": "Hoi! Er is nog niemand om aan te kleden.",
+    "noChildrenHint": "Een grote mens moet eerst een kind toevoegen.",
+    "whoAreYou": "Wie ben jij?",
+    "speakWhoAreYou": "Hoi! Wie ben jij?",
+    "speakGreeting": "Hoi {{name}}! Wat trek je vandaag aan?",
+    "speakAllChosen": "Goed zo! Tik op klaar.",
+    "speakDone": "Super, {{name}}!",
+    "switchLabel": "Wie ben jij? Nu: {{name}}",
+    "switchTitle": "Ander kind kiezen",
+    "restart": "Opnieuw beginnen",
+    "undo": "Ongedaan maken",
+    "doneTitle": "Dit trek ik vandaag aan!",
+    "wardrobeEmptyLead": "De kleerkast is nog leeg.",
+    "wardrobeEmptyHint": "Een grote mens kan er kleren in doen.",
+    "nothingAvailableLead": "Er zijn nu geen kleren om uit te kiezen.",
+    "nothingAvailableHint": "Een grote mens kan kijken naar het seizoen of naar kleren die in de was zijn.",
+    "noSizeMatch": "Er is geen kleding in jouw maat. Vraag een grote mens om je maten na te kijken.",
+    "dressChosen": "Je hebt een jurk gekozen. Kies hier iets om te wisselen.",
+    "nothingFits": "Hier past niets bij."
+  }
+}

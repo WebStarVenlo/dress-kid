@@ -4,7 +4,7 @@ import { IconCheck } from '../shared/icons'
 import { Photo } from './KidArt'
 import { itemLabel } from './kidUtils'
 
-/** Een kledingstuk als "sticker": witte kaart met foto; gekozen = mint rand, scheef en een vinkje. */
+/** A piece of clothing as a "sticker": white card with a photo; chosen = mint border, tilted and a check mark. */
 export function ItemTile({
   item,
   index,

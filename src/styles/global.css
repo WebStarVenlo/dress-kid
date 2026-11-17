@@ -1,9 +1,9 @@
 :root {
-  /* Lettertypen */
+  /* Fonts */
   --font-display: 'Fredoka', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
   --font-body: 'Nunito', ui-rounded, 'Segoe UI', system-ui, -apple-system, sans-serif;
 
-  /* Speelkast-palet: kleur + harde onderrand */
+  /* Play-cabinet palette: colour + hard bottom edge */
   --grape: #7b5cff;
   --grape-edge: #5a3fd6;
   --mint: #2fc99a;
@@ -19,7 +19,7 @@
   --danger: #ef476f;
   --danger-edge: #c42e55;
 
-  /* Vlakken en tekst */
+  /* Surfaces and text */
   --vanilla: #fff6ec;
   --surface: #ffffff;
   --surface-edge: #ece4d6;
@@ -27,7 +27,7 @@
   --ink: #2b2350;
   --ink-soft: #6d6690;
 
-  /* Vorm en beweging */
+  /* Shape and motion */
   --press: 5px;
   --radius: 20px;
   --radius-lg: 28px;
@@ -36,7 +36,7 @@
   --tap-min: 64px;
   --space: 16px;
 
-  /* Oude namen als alias (kid.css, parent.css, pin.css) */
+  /* Old names as aliases (kid.css, parent.css, pin.css) */
   --color-bg: var(--vanilla);
   --color-surface: var(--surface);
   --color-text: var(--ink);

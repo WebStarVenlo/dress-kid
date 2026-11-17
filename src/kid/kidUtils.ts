@@ -1,26 +1,20 @@
-/** Kleine hulpjes voor de kindmodus: seizoen, vragen, labels en beweging. */
+/** Small helpers for kid mode: season, questions, labels and motion. */
 import { CATEGORY_LABELS } from '../domain/types'
 import type { Category, Child, ClothingItem, CurrentSeason, Outfit } from '../domain/types'
+import { t } from '../i18n'
 
 export type KidSeason = 'summer' | 'winter'
 
-/** Zomer of winter voor de achtergrond; bij 'all' bepaalt de maand het (april t/m september = zomer). */
+/** Summer or winter for the background; for 'all' the month decides (April to September = summer). */
 export function resolveSeason(current: CurrentSeason | undefined, now: Date = new Date()): KidSeason {
   if (current === 'summer' || current === 'winter') return current
   const month = now.getMonth()
   return month >= 3 && month <= 8 ? 'summer' : 'winter'
 }
 
-/** De vraag die de gids per soort kleding stelt (en voorleest). */
-export const CATEGORY_QUESTIONS: Record<Category, string> = {
-  top: 'Welk shirt wil je?',
-  bottom: 'Welke broek of rok?',
-  dress: 'Welke jurk?',
-  sweater: 'Welke trui of welk vest?',
-  socks: 'Welke sokken?',
-  shoes: 'Welke schoenen?',
-  jacket: 'Welke jas?',
-  accessory: 'Wil je een extraatje?',
+/** The question the guide asks (and reads aloud) for each kind of clothing. */
+export function categoryQuestion(category: Category): string {
+  return t(`kid:questions.${category}`)
 }
 
 export function initial(child: Child): string {
@@ -32,9 +26,9 @@ export function itemLabel(item: ClothingItem): string {
 }
 
 /**
- * De vakjes van de paspop (en de stukjes van de voortgangsbalk): alleen soorten die nu nog
- * meetellen. Een jurk vervangt shirt en broek; zonder jurk telt de jurk niet mee, tenzij er
- * geen shirts of broeken zijn. Wat al gekozen is, krijgt altijd een vakje.
+ * The slots of the doll (and the segments of the progress bar): only kinds that still count.
+ * A dress replaces shirt and trousers; without a dress the dress does not count, unless there
+ * are no shirts or trousers. Whatever is already chosen always gets a slot.
  */
 export function slotCategories(categories: readonly Category[], outfit: Outfit): Category[] {
   const hasDress = outfit.dress !== undefined
@@ -47,7 +41,7 @@ export function slotCategories(categories: readonly Category[], outfit: Outfit):
   })
 }
 
-/** Wil de gebruiker minder beweging? Veilig als matchMedia ontbreekt (jsdom, oude browsers). */
+/** Does the user want less motion? Safe when matchMedia is missing (jsdom, old browsers). */
 export function prefersReducedMotion(): boolean {
   try {
     return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -56,7 +50,7 @@ export function prefersReducedMotion(): boolean {
   }
 }
 
-/** Deterministisch "toeval" (0..1) voor confetti en sneeuw: zelfde index, zelfde waarde. */
+/** Deterministic "randomness" (0..1) for confetti and snow: same index, same value. */
 export function noise(index: number, salt: number): number {
   const x = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453
   return x - Math.floor(x)
@@ -68,8 +62,8 @@ export interface FlightStart {
 }
 
 /**
- * Laat een kopie van de foto van de tegel naar het vakje op de paspop vliegen (Web Animations).
- * Doet niets zonder `Element.animate`, bij minder beweging of als het doel onzichtbaar is.
+ * Makes a copy of the tile's photo fly to the slot on the doll (Web Animations).
+ * Does nothing without `Element.animate`, under reduced motion or if the target is invisible.
  */
 export function flyPhoto(from: FlightStart, target: HTMLElement): void {
   if (prefersReducedMotion()) return
@@ -110,7 +104,7 @@ export function flyPhoto(from: FlightStart, target: HTMLElement): void {
   flight.oncancel = cleanup
   window.setTimeout(cleanup, duration + 400)
 
-  // Het vakje blijft leeg tot de foto er "inploft".
+  // The slot stays empty until the photo "plops" in.
   const landing = target.querySelector('img') ?? target
   landing.animate(
     [

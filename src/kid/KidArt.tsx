@@ -1,4 +1,4 @@
-/** Tekeningetjes voor de kindmodus: profielplaatje, de gids, de paspop en de sterren. */
+/** Little drawings for kid mode: profile picture, the guide, the dress-up doll and the stars. */
 import type { CSSProperties } from 'react'
 import type { Category, Child, ClothingItem, Outfit } from '../domain/types'
 import { AnimalAvatar, AVATAR_COLORS } from '../shared/AnimalAvatar'
@@ -9,15 +9,15 @@ const INK = '#2B2350'
 const SKIN = '#FFD9C2'
 const CHEEK = '#FF6FAE'
 
-/** Foto van een kledingstuk; altijd decoratief (de naam staat ernaast of in een label). */
+/** Photo of a piece of clothing; always decorative (the name is next to it or in a label). */
 export function Photo({ item, className }: { item: ClothingItem; className?: string }) {
   const url = usePhotoUrl(item.photo)
   return <img className={className} src={url} alt="" draggable={false} />
 }
 
 /**
- * Het profielplaatje van een kind: het gekozen dier, of anders de (emoji-)beginletter in de
- * kleur van het kind. Altijd aria-hidden; de naam staat elders.
+ * A child's profile picture: the chosen animal, or else the (emoji) initial in the child's
+ * colour. Always aria-hidden; the name appears elsewhere.
  */
 export function ChildAvatar({ child, className = '' }: { child: Child; className?: string }) {
   if (child.avatar) {
@@ -42,7 +42,7 @@ export function ChildAvatar({ child, className = '' }: { child: Child; className
   )
 }
 
-/** De gids als er (nog) geen kind is: een vrolijk T-shirtje met een gezichtje. */
+/** The guide when there is no child (yet): a cheerful T-shirt with a little face. */
 export function Mascot({ className = '', mood = 'happy' }: { className?: string; mood?: 'happy' | 'oops' }) {
   return (
     <svg className={`kid-mascot ${className}`} viewBox="0 0 100 100" aria-hidden="true" focusable="false">
@@ -69,7 +69,7 @@ export function Mascot({ className = '', mood = 'happy' }: { className?: string;
   )
 }
 
-/** Een leeg kleerhangertje met glimmertjes, voor een lege kast. */
+/** An empty clothes hanger with sparkles, for an empty wardrobe. */
 export function Hanger({ className = '' }: { className?: string }) {
   const sparkle = (x: number, y: number, r: number) =>
     `M${x} ${y - r} Q${x} ${y} ${x + r} ${y} Q${x} ${y} ${x} ${y + r} Q${x} ${y} ${x - r} ${y} Q${x} ${y} ${x} ${y - r}Z`
@@ -96,7 +96,7 @@ export function Hanger({ className = '' }: { className?: string }) {
   )
 }
 
-/** Eén ster zoals op het feestscherm: geel met een donkere rand en een glimmertje. */
+/** One star as on the celebration screen: yellow with a dark edge and a sparkle. */
 export function PartyStar({ className = '' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
@@ -112,7 +112,7 @@ export function PartyStar({ className = '' }: { className?: string }) {
   )
 }
 
-/** Een zonnetje met draaiende stralen voor de zomerachtergrond. */
+/** A little sun with spinning rays for the summer background. */
 export function Sun({ className = '' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 200 200" aria-hidden="true" focusable="false">
@@ -149,15 +149,15 @@ const PANTS_PATH =
 const DRESS_PATH = 'M45 58 Q60 53 75 58 L79 78 L93 140 Q60 150 27 140 L41 78 Z'
 
 /**
- * De paspop: een figuurtje dat zich aankleedt met wat het kind kiest. Lege vakjes die nog
- * meetellen staan als stippellijn; elk gekozen stuk "ploft" erop met een eigen kleur.
+ * The dress-up doll: a little figure that gets dressed with what the child chooses. Empty slots
+ * that still count are shown as a dotted outline; each chosen piece "plops" on in its own colour.
  */
 export function Doll({ outfit, slots, className = '' }: { outfit: Outfit; slots: readonly Category[]; className?: string }) {
   const has = (category: Category) => outfit[category] !== undefined
   const ghost = (category: Category) => slots.includes(category) && !has(category)
   return (
     <svg className={`kid-doll ${className}`} viewBox="0 0 120 200" aria-hidden="true" focusable="false">
-      {/* Lijfje */}
+      {/* Body */}
       <rect x={43} y={116} width={15} height={62} rx={7.5} fill={SKIN} />
       <rect x={62} y={116} width={15} height={62} rx={7.5} fill={SKIN} />
       <path d="M41 66 L27 108 M79 66 L93 108" stroke={SKIN} strokeWidth={12} strokeLinecap="round" />
@@ -166,7 +166,7 @@ export function Doll({ outfit, slots, className = '' }: { outfit: Outfit; slots:
       <ellipse cx={50} cy={182} rx={10} ry={6} fill={SKIN} />
       <ellipse cx={70} cy={182} rx={10} ry={6} fill={SKIN} />
 
-      {/* Stippellijnen: hier komt nog iets */}
+      {/* Dotted outlines: something still goes here */}
       {ghost('top') ? <path d={SHIRT_PATH} {...DASH} /> : null}
       {ghost('dress') ? <path d={DRESS_PATH} {...DASH} /> : null}
       {ghost('bottom') ? <path d={PANTS_PATH} {...DASH} /> : null}
@@ -174,7 +174,7 @@ export function Doll({ outfit, slots, className = '' }: { outfit: Outfit; slots:
         <path d="M39 186 Q39 176 50 176 Q61 176 61 186 Z M59 186 Q59 176 70 176 Q81 176 81 186 Z" {...DASH} />
       ) : null}
 
-      {/* Gekozen kleding */}
+      {/* Chosen clothes */}
       {has('socks') ? (
         <g className="kid-doll__piece">
           <rect x={42} y={164} width={17} height={18} rx={5} fill="#fff" stroke="#E7DDF8" strokeWidth={1.5} />
@@ -230,11 +230,11 @@ export function Doll({ outfit, slots, className = '' }: { outfit: Outfit; slots:
           <circle cx={52} cy={112} r={2.6} fill="#E06A1B" />
         </g>
       ) : null}
-      {/* Handjes over de mouwen heen */}
+      {/* Little hands over the sleeves */}
       <circle cx={26} cy={112} r={6.5} fill={SKIN} />
       <circle cx={94} cy={112} r={6.5} fill={SKIN} />
 
-      {/* Hoofd */}
+      {/* Head */}
       <circle cx={60} cy={32} r={23} fill={SKIN} />
       <path d="M37 32 Q36 8 60 8 Q84 8 83 32 Q77 19 64 18 Q66 24 58 26 Q60 20 52 19 Q42 21 37 32 Z" fill="#7A5236" />
       <circle cx={51.5} cy={35} r={3.2} fill={INK} />
