@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from 'react-i18next'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
 import type { ClothingItem } from '../domain/types'
 import { IconCamera, IconChildren, IconWash } from '../shared/icons'
@@ -5,7 +6,7 @@ import { Thumb, itemLabel } from './shared'
 
 interface WardrobeProps {
   items: ClothingItem[]
-  /** False als zeker is dat er nog geen kind is aangemaakt (niet tijdens laden of na een laadfout). */
+  /** False when it is certain no child has been created yet (not while loading or after a load error). */
   hasChildren: boolean
   onAdd: () => void
   onOpen: (id: string) => void
@@ -13,10 +14,11 @@ interface WardrobeProps {
 }
 
 export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChildren }: WardrobeProps) {
+  const { t } = useTranslation('parent')
   return (
     <section aria-labelledby="parent-wardrobe-title" className="parent-wardrobe">
       <div className="parent-title-row">
-        <h2 id="parent-wardrobe-title">Kledingkast</h2>
+        <h2 id="parent-wardrobe-title">{t('wardrobe.title')}</h2>
         <span className="parent-count">
           {items.length}
         </span>
@@ -27,10 +29,10 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
             <IconChildren size={26} />
           </span>
           <p>
-            <strong>Nog geen kind aangemaakt.</strong> De kinderomgeving heeft minstens één kind nodig.
+            <strong>{t('wardrobe.noChildTitle')}</strong> {t('wardrobe.noChildBody')}
           </p>
           <button type="button" onClick={onOpenChildren}>
-            Kind toevoegen
+            {t('wardrobe.addChild')}
           </button>
         </div>
       )}
@@ -40,11 +42,10 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
             <IconCamera size={34} />
           </span>
           <p>
-            <strong>Nog niets in de kledingkast.</strong>
+            <strong>{t('wardrobe.emptyTitle')}</strong>
           </p>
           <p>
-            Eerste stap: tik op <em>Kleding toevoegen</em>, kies wat het is en maak een foto. Je kunt ook
-            meerdere foto&apos;s tegelijk uit je galerij kiezen.
+            <Trans t={t} i18nKey="wardrobe.emptyHint" components={{ em: <em /> }} />
           </p>
         </div>
       ) : (
@@ -67,18 +68,18 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
                       type="button"
                       className={`parent-tile${item.available ? '' : ' is-away'}`}
                       onClick={() => onOpen(item.id)}
-                      aria-label={`${itemLabel(item)}, bekijk of wijzig`}
+                      aria-label={t('wardrobe.tileLabel', { label: itemLabel(item) })}
                     >
                       <Thumb photo={item.photo} />
                       <span className="parent-badges">
-                        {item.size ? <span className="parent-badge">Maat {item.size}</span> : null}
+                        {item.size ? <span className="parent-badge">{t('wardrobe.size', { size: item.size })}</span> : null}
                         {item.season !== 'all' ? (
                           <span className="parent-badge">{SEASON_LABELS[item.season]}</span>
                         ) : null}
                         {!item.available ? (
                           <span className="parent-badge parent-badge-wash">
                             <IconWash size={11} />
-                            In de was
+                            {t('wardrobe.inWash')}
                           </span>
                         ) : null}
                         {item.excludedIds.length > 0 ? (
@@ -97,7 +98,7 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
         <span className="parent-fab-icon" aria-hidden="true">
           <IconCamera size={22} />
         </span>
-        <span className="parent-fab-label">Kleding toevoegen</span>
+        <span className="parent-fab-label">{t('wardrobe.add')}</span>
       </button>
     </section>
   )

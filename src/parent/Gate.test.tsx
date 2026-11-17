@@ -19,7 +19,7 @@ function renderGate(customStore: WardrobeStore = store) {
 }
 
 async function setPin(pin: string) {
-  // Weinig iteraties houdt de tests snel; de opgeslagen iteraties worden bij controle gebruikt.
+  // Few iterations keep the tests fast; the stored iterations are used on verification.
   await store.setParentPin(await hashPin(pin, undefined, 1000))
 }
 

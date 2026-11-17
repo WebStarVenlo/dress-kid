@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { SHARED_FLAG, takeShared } from '../domain/sharedPhotos'
 import { useChildren, useWardrobe } from '../shared/hooks'
@@ -16,14 +17,14 @@ import Wardrobe from './Wardrobe'
 import { isUnlocked, lock, touchUnlock } from './unlock'
 import './parent.css'
 
-/** Hoe vaak we controleren of het slot is verlopen terwijl de pagina open staat. */
+/** How often we check whether the lock has expired while the page is open. */
 const CHECK_INTERVAL_MS = 15_000
-/** Activiteit verlengt de geldigheid hooguit zo vaak (voorkomt schrijven bij elke beweging). */
+/** Activity extends the validity at most this often (avoids writing on every movement). */
 const TOUCH_THROTTLE_MS = 5_000
 
 /**
- * Uitstel voor het opnieuw vergrendelen bij unmount. React StrictMode (dev) voert effecten uit als
- * mount → cleanup → mount; de tweede mount annuleert het uitgestelde vergrendelen.
+ * Deferred re-lock on unmount. React StrictMode (dev) runs effects as
+ * mount → cleanup → mount; the second mount cancels the deferred lock.
  */
 let pendingLock: ReturnType<typeof setTimeout> | undefined
 
@@ -63,7 +64,7 @@ function useAutoLock(active: boolean, onExpire: () => void): void {
       for (const name of events) document.removeEventListener(name, onActivity, true)
       document.removeEventListener('visibilitychange', onVisibility)
       clearInterval(timer)
-      // Het ouderscherm verdwijnt (terug naar kind, andere route): vergrendel, tenzij direct opnieuw gemount.
+      // The parent screen goes away (back to child, other route): lock, unless remounted right away.
       pendingLock = setTimeout(() => {
         pendingLock = undefined
         lock()
@@ -73,15 +74,15 @@ function useAutoLock(active: boolean, onExpire: () => void): void {
 }
 
 export interface ParentAppProps {
-  /** Opslag; standaard de gedeelde opslag van de app. */
+  /** Storage; defaults to the app's shared storage. */
   store?: WardrobeStore
-  /** Maakt de som voor het ouderslot; injecteerbaar voor tests. */
+  /** Creates the sum for the parent gate; injectable for tests. */
   makeSum?: () => Sum
 }
 
 type View =
   | { name: 'wardrobe' }
-  /** files/url: gedeeld via "Delen → Dress Kid"; shareId maakt er een vers toevoegscherm van. */
+  /** files/url: shared via "Share → Dress Kid"; shareId makes it a fresh add screen. */
   | { name: 'add'; files?: File[]; url?: string; shareId?: number }
   | { name: 'item'; id: string } | { name: 'settings' } | { name: 'backup' } | { name: 'children' }
 
@@ -110,16 +111,16 @@ export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps
 }
 
 /**
- * Gedeeld via het deelmenu (Android): de service worker heeft de foto's klaargezet en doorgestuurd
- * naar `#/ouder?gedeeld=1`. Dit draait pas na het ouderslot (ParentMain), dus de foto's wachten
- * tot de ouder ontgrendeld heeft. Met de vlag opent altijd het toevoegscherm, ook als er niets
- * bruikbaars meekwam; zonder vlag alleen als er nog foto's of een link klaarstaan.
+ * Shared via the share menu (Android): the service worker has staged the photos and redirected
+ * to `#/parent?shared=1`. This only runs after the parent gate (ParentMain), so the photos wait
+ * until the parent has unlocked. With the flag the add screen always opens, even if nothing
+ * usable came along; without the flag only if photos or a link are still waiting.
  */
 function useSharedPhotos(setView: (view: View) => void) {
   const location = useLocation()
   const navigate = useNavigate()
   const flagged = new URLSearchParams(location.search).has(SHARED_FLAG)
-  // Eén keer per mount; een ref blijft bewaard bij de dubbele effecten van StrictMode.
+  // Once per mount; a ref survives the double effects of StrictMode.
   const checked = useRef(false)
   const latest = useRef({ flagged, location, navigate, setView })
   useEffect(() => {
@@ -131,7 +132,7 @@ function useSharedPhotos(setView: (view: View) => void) {
     checked.current = true
     const { flagged: wasFlagged, location: at, navigate: go } = latest.current
     if (wasFlagged) {
-      // Haal de vlag uit de URL, zodat herladen het toevoegscherm niet opnieuw opent.
+      // Remove the flag from the URL so reloading doesn't reopen the add screen.
       const params = new URLSearchParams(at.search)
       params.delete(SHARED_FLAG)
       const search = params.toString()
@@ -150,19 +151,20 @@ function useSharedPhotos(setView: (view: View) => void) {
 }
 
 const TABS = [
-  { name: 'wardrobe', label: 'Kast', Icon: IconWardrobe },
-  { name: 'children', label: 'Kinderen', Icon: IconChildren },
-  { name: 'settings', label: 'Instellingen', Icon: IconSettings },
-  { name: 'backup', label: 'Back-up', Icon: IconBackup },
+  { name: 'wardrobe', label: 'app.tabs.wardrobe', Icon: IconWardrobe },
+  { name: 'children', label: 'app.tabs.children', Icon: IconChildren },
+  { name: 'settings', label: 'app.tabs.settings', Icon: IconSettings },
+  { name: 'backup', label: 'app.tabs.backup', Icon: IconBackup },
 ] as const
 
 function ParentMain({ store }: { store: WardrobeStore }) {
+  const { t } = useTranslation('parent')
   const { items, settings, loading, error, reload } = useWardrobe(store)
   const { children, loading: childrenLoading, error: childrenError, reload: reloadChildren } = useChildren(store)
   const [view, setView] = useState<View>({ name: 'wardrobe' })
   useSharedPhotos(setView)
 
-  // Vraag de browser de kledingkast te beschermen tegen automatisch opruimen.
+  // Ask the browser to protect the wardrobe from automatic cleanup.
   useEffect(() => {
     void requestPersistentStorage()
   }, [])
@@ -175,7 +177,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
   if (loading) {
     content = (
       <p role="status" className="parent-hint">
-        Laden…
+        {t('app.loading')}
       </p>
     )
   } else if (error && items.length === 0 && view.name === 'wardrobe') {
@@ -185,7 +187,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
           {error}
         </p>
         <button type="button" onClick={() => void reload()}>
-          Opnieuw proberen
+          {t('app.retry')}
         </button>
       </div>
     )
@@ -214,9 +216,9 @@ function ParentMain({ store }: { store: WardrobeStore }) {
       />
     ) : (
       <div className="parent-card">
-        <p>Dit kledingstuk bestaat niet meer.</p>
+        <p>{t('app.itemGone')}</p>
         <button type="button" onClick={goHome}>
-          Terug naar de kast
+          {t('app.backToWardrobe')}
         </button>
       </div>
     )
@@ -228,7 +230,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
     content = <BackupPanel
         store={store}
         reload={async () => {
-          // Een back-up bevat ook kinderen: ververs beide.
+          // A backup also contains children: refresh both.
           await Promise.all([reload(), reloadChildren()])
         }}
       />
@@ -236,7 +238,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
     content = (
       <Wardrobe
         items={items}
-        // Toon de hint 'nog geen kind' pas als zeker is dat er echt geen kinderen zijn.
+        // Only show the 'no child yet' hint once it is certain there really are no children.
         hasChildren={childrenLoading || childrenError !== undefined || children.length > 0}
         onAdd={() => setView({ name: 'add' })}
         onOpen={(id) => setView({ name: 'item', id })}
@@ -253,10 +255,10 @@ function ParentMain({ store }: { store: WardrobeStore }) {
             <span className="parent-brand-mark" aria-hidden="true">
               <IconWardrobe size={26} />
             </span>
-            <h1>Ouderbeheer</h1>
+            <h1>{t('app.title')}</h1>
           </div>
           <Link className="parent-link" to="/">
-            Naar de kledingkast van je kind
+            {t('app.toKid')}
             <IconArrowRight size={18} />
           </Link>
         </header>
@@ -272,7 +274,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
         ) : null}
         {content}
       </main>
-      <nav className="parent-nav" aria-label="Ouderbeheer">
+      <nav className="parent-nav" aria-label={t('app.navLabel')}>
         {TABS.map(({ name, label, Icon }) => (
           <button
             key={name}
@@ -284,7 +286,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
             <span className="parent-tab-icon">
               <Icon size={22} />
             </span>
-            <span className="parent-tab-label">{label}</span>
+            <span className="parent-tab-label">{t(label)}</span>
           </button>
         ))}
       </nav>

@@ -20,7 +20,7 @@ function setup() {
   return { ...props, ...view }
 }
 
-/** jsdom kent geen layout: geef het fotovlak een vaste maat. */
+/** jsdom has no layout: give the photo area a fixed size. */
 function sizeFrame(width: number, height: number) {
   const frame = document.querySelector('.parent-crop-frame') as HTMLElement
   frame.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, width, height, right: width, bottom: height, toJSON: () => ({}) })

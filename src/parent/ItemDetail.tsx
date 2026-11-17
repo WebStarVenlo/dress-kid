@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
 import type { Category, Child, ClothingItem, ItemSeason } from '../domain/types'
 import { cropPhoto, resizePhoto } from '../domain/image'
@@ -28,14 +29,15 @@ const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
 }))
 
 export default function ItemDetail({ store, item, items, children, reload, onBack }: Props) {
+  const { t } = useTranslation('parent')
   const [error, setError] = useState<string | undefined>()
   const [name, setName] = useState(item.name ?? '')
   const [size, setSize] = useState(item.size ?? '')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
-  /** Optimistische uitsluitingen: id van ander kledingstuk -> verwachte stand. */
+  /** Optimistic exclusions: id of another item -> expected state. */
   const [optimistic, setOptimistic] = useState<Record<string, boolean>>({})
-  /** Bijsnijden van de huidige foto ('current') of van een nieuwe foto die de huidige vervangt. */
+  /** Cropping the current photo ('current') or a new photo that replaces the current one. */
   const [cropping, setCropping] = useState<{ kind: 'current' } | { kind: 'new'; file: File } | undefined>()
   const photoRef = useRef<HTMLInputElement>(null)
   const nameId = useId()
@@ -55,7 +57,7 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
   }
 
   const update = (changes: Parameters<WardrobeStore['updateItem']>[1]) =>
-    run(async () => void (await store.updateItem(item.id, changes)), 'Opslaan is niet gelukt.')
+    run(async () => void (await store.updateItem(item.id, changes)), t('itemDetail.saveFailed'))
 
   async function saveName() {
     const trimmed = name.trim()
@@ -75,7 +77,7 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
     if (file) void replacePhoto([file])
   }
 
-  /** Een nieuwe foto gaat eerst langs het bijsnijden. */
+  /** A new photo goes through cropping first. */
   function replacePhoto(files: File[]) {
     const file = files[0]
     if (!file || busy || cropping) return
@@ -99,14 +101,14 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
 
   async function remove() {
     setBusy(true)
-    const ok = await run(() => store.deleteItem(item.id), 'Verwijderen is niet gelukt.')
+    const ok = await run(() => store.deleteItem(item.id), t('itemDetail.deleteFailed'))
     setBusy(false)
     if (ok) onBack()
   }
 
   async function toggleExcluded(other: ClothingItem, excluded: boolean) {
     setOptimistic((prev) => ({ ...prev, [other.id]: excluded }))
-    await run(() => store.setExcluded(item.id, other.id, excluded), 'Opslaan is niet gelukt.')
+    await run(() => store.setExcluded(item.id, other.id, excluded), t('itemDetail.saveFailed'))
     setOptimistic((prev) => {
       const next = { ...prev }
       delete next[other.id]
@@ -120,7 +122,7 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
     <section aria-labelledby="parent-item-title">
       <button type="button" className="parent-back" onClick={onBack}>
         <IconArrowLeft size={18} />
-        Terug naar de kast
+        {t('itemDetail.back')}
       </button>
       <div className="parent-title-row">
         <h2 id="parent-item-title">{itemLabel(item)}</h2>
@@ -128,7 +130,7 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
 
       <PhotoImport compact disabled={busy || cropping !== undefined} onFiles={replacePhoto}>
         <div className="parent-detail-photo">
-          {photoUrl ? <img src={photoUrl} alt={`Foto van ${itemLabel(item)}`} /> : null}
+          {photoUrl ? <img src={photoUrl} alt={t('itemDetail.photoAlt', { label: itemLabel(item) })} /> : null}
         </div>
       </PhotoImport>
       <input
@@ -136,33 +138,33 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         className="parent-file"
         type="file"
         accept="image/*"
-        aria-label="Nieuwe foto kiezen"
+        aria-label={t('itemDetail.pickNewPhoto')}
         tabIndex={-1}
         onChange={pickPhoto}
       />
       <div className="parent-photo-tools">
         <button type="button" className="secondary" disabled={busy} onClick={() => setCropping({ kind: 'current' })}>
           <IconCrop size={22} />
-          Bijsnijden
+          {t('itemDetail.crop')}
         </button>
         <button type="button" className="secondary" disabled={busy} onClick={() => photoRef.current?.click()}>
           <IconCamera size={22} />
-          Andere foto
+          {t('itemDetail.otherPhoto')}
         </button>
       </div>
       {cropping?.kind === 'current' ? (
         <CropDialog
           photo={item.photo}
-          onCrop={(rect) => void savePhoto(item.photo, rect, 'Bijsnijden is niet gelukt.')}
+          onCrop={(rect) => void savePhoto(item.photo, rect, t('itemDetail.cropFailed'))}
           onCancel={() => setCropping(undefined)}
         />
       ) : null}
       {cropping?.kind === 'new' ? (
         <CropDialog
           photo={cropping.file}
-          title="Nieuwe foto bijsnijden"
-          onCrop={(rect) => void savePhoto(cropping.file, rect, 'De foto kon niet worden vervangen.')}
-          onWholePhoto={() => void savePhoto(cropping.file, undefined, 'De foto kon niet worden vervangen.')}
+          title={t('itemDetail.cropNewTitle')}
+          onCrop={(rect) => void savePhoto(cropping.file, rect, t('itemDetail.replaceFailed'))}
+          onWholePhoto={() => void savePhoto(cropping.file, undefined, t('itemDetail.replaceFailed'))}
           onCancel={() => setCropping(undefined)}
         />
       ) : null}
@@ -176,7 +178,7 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
       <div className="parent-card parent-form">
         <div className="parent-field">
           <label htmlFor={nameId} className="parent-field-label">
-            Naam (mag leeg blijven)
+            {t('itemDetail.nameLabel')}
           </label>
           <input
             id={nameId}
@@ -200,12 +202,12 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
       </div>
       {children.length > 0 ? (
         <section className="parent-card" aria-labelledby="parent-fits-title">
-          <h3 id="parent-fits-title">Past bij</h3>
+          <h3 id="parent-fits-title">{t('itemDetail.fitsTitle')}</h3>
           <ul className="parent-fits">
             {children.map((child) => (
               <li key={child.id}>
                 <ChildAvatar child={child} size={28} />
-                {child.name}: {itemFitsChild(item, child) ? 'ja' : 'nee'}
+                {t(itemFitsChild(item, child) ? 'itemDetail.fitsYes' : 'itemDetail.fitsNo', { name: child.name })}
               </li>
             ))}
           </ul>
@@ -214,14 +216,14 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
 
       <div className="parent-card parent-form">
         <ChoiceGroup
-          legend="Categorie"
+          legend={t('itemDetail.category')}
           value={item.category}
           options={CATEGORY_OPTIONS}
           onChange={(category: Category) => void update({ category })}
           variant="cards"
         />
         <ChoiceGroup
-          legend="Seizoen"
+          legend={t('itemDetail.season')}
           value={item.season}
           options={ITEM_SEASON_OPTIONS}
           onChange={(season: ItemSeason) => void update({ season })}
@@ -239,17 +241,17 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
           <IconWash size={24} />
         </span>
         <span className="parent-wash-text">
-          <span className="parent-wash-title">In de was</span>
-          <span className="parent-wash-state">{item.available ? 'Nee' : 'Ja, niet beschikbaar'}</span>
+          <span className="parent-wash-title">{t('itemDetail.washTitle')}</span>
+          <span className="parent-wash-state">{item.available ? t('itemDetail.washNo') : t('itemDetail.washYes')}</span>
         </span>
         <span className="parent-switch" aria-hidden="true" />
       </button>
 
       <section className="parent-card" aria-labelledby="parent-excl-title">
-        <h3 id="parent-excl-title">Past niet bij</h3>
-        <p>Tik aan wat hier níet bij past. Alles wat je niet aantikt, mag je kind combineren.</p>
+        <h3 id="parent-excl-title">{t('itemDetail.excludedTitle')}</h3>
+        <p>{t('itemDetail.excludedIntro')}</p>
         {others.length === 0 ? (
-          <p className="parent-hint">Er zijn nog geen andere kledingstukken om uit te kiezen.</p>
+          <p className="parent-hint">{t('itemDetail.noOthers')}</p>
         ) : (
           CATEGORIES.map((category) => {
             const inCategory = others.filter((other) => other.category === category)
@@ -269,7 +271,7 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
                           type="button"
                           className={`parent-tile${excluded ? ' is-excluded' : ''}`}
                           aria-pressed={excluded}
-                          aria-label={`Past niet bij: ${itemLabel(other)}`}
+                          aria-label={t('itemDetail.excludedLabel', { label: itemLabel(other) })}
                           onClick={() => void toggleExcluded(other, !excluded)}
                         >
                           <Thumb photo={other.photo} />
@@ -290,21 +292,21 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
       </section>
 
       {confirmDelete ? (
-        <div className="parent-card parent-confirm" role="alertdialog" aria-label="Verwijderen bevestigen">
-          <p>Weet je zeker dat je dit kledingstuk wilt verwijderen?</p>
+        <div className="parent-card parent-confirm" role="alertdialog" aria-label={t('itemDetail.deleteDialogLabel')}>
+          <p>{t('itemDetail.deleteConfirm')}</p>
           <div className="parent-stack">
             <button type="button" className="danger" disabled={busy} onClick={() => void remove()}>
-              Ja, verwijderen
+              {t('itemDetail.deleteYes')}
             </button>
             <button type="button" className="secondary" onClick={() => setConfirmDelete(false)}>
-              Annuleren
+              {t('itemDetail.cancel')}
             </button>
           </div>
         </div>
       ) : (
         <button type="button" className="danger parent-delete" onClick={() => setConfirmDelete(true)}>
           <IconTrash size={22} />
-          Verwijderen
+          {t('itemDetail.delete')}
         </button>
       )}
     </section>

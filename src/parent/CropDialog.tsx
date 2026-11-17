@@ -1,15 +1,16 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { DEFAULT_CROP, adjustCropRect } from '../domain/crop'
 import type { CropMode, CropRect } from '../domain/crop'
 import { usePhotoUrl } from '../shared/hooks'
 
 interface Props {
-  /** De foto die bijgesneden wordt. */
+  /** The photo being cropped. */
   photo: Blob
-  /** Bevestigd: het gekozen kader in fracties (0..1) van de foto. */
+  /** Confirmed: the chosen frame as fractions (0..1) of the photo. */
   onCrop: (rect: CropRect) => void
-  /** Niet bijsnijden, de hele foto gebruiken. Zonder deze functie geen knop "Hele foto". */
+  /** Don't crop, use the whole photo. Without this function there is no "Whole photo" button. */
   onWholePhoto?: () => void
   onCancel: () => void
   title?: string
@@ -23,17 +24,12 @@ interface Drag {
   start: CropRect
 }
 
-const CORNERS: { mode: CropMode; label: string }[] = [
-  { mode: 'nw', label: 'linksboven' },
-  { mode: 'ne', label: 'rechtsboven' },
-  { mode: 'sw', label: 'linksonder' },
-  { mode: 'se', label: 'rechtsonder' },
-]
+const CORNERS = ['nw', 'ne', 'sw', 'se'] as const
 
 const KEY_STEP = 0.02
 const pct = (value: number) => `${value * 100}%`
 
-/** Focus terug naar het vorige element; is dat weg of uitgeschakeld, dan naar de hoofdkop of container. */
+/** Return focus to the previous element; if that is gone or disabled, to the main heading or container. */
 function restoreFocus(previous: Element | null) {
   if (previous instanceof HTMLElement && previous.isConnected && !(previous as HTMLButtonElement).disabled) {
     previous.focus()
@@ -44,9 +40,10 @@ function restoreFocus(previous: Element | null) {
   fallback.focus()
 }
 
-/** Bijsnijden met een sleepbaar kader; werkt met muis, vinger en pijltjestoetsen. */
-export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, title = 'Foto bijsnijden' }: Props) {
-  // Gedeelde object-URL; wordt ingetrokken zodra niemand hem meer toont.
+/** Cropping with a draggable frame; works with mouse, finger and arrow keys. */
+export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, title }: Props) {
+  const { t } = useTranslation('parent')
+  // Shared object URL; revoked as soon as nobody shows it anymore.
   const url = usePhotoUrl(photo)
   const [rect, setRect] = useState<CropRect>(DEFAULT_CROP)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -70,7 +67,7 @@ export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, titl
         return
       }
       if (event.key !== 'Tab') return
-      // Focusval: Tab en Shift+Tab blijven binnen het venster.
+      // Focus trap: Tab and Shift+Tab stay inside the window.
       const nodes = Array.from(
         dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [],
       )
@@ -113,7 +110,7 @@ export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, titl
     if (drag.current?.pointerId === event.pointerId) drag.current = undefined
   }
 
-  /** Pijltjes verplaatsen het kader, Shift+pijltjes maakt het groter of kleiner. */
+  /** Arrows move the frame, Shift+arrows make it larger or smaller. */
   function onBoxKey(event: KeyboardEvent<HTMLDivElement>) {
     const delta: Record<string, [number, number]> = {
       ArrowLeft: [-KEY_STEP, 0],
@@ -132,9 +129,9 @@ export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, titl
   return (
     <div className="parent-crop-backdrop">
       <div className="parent-crop" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={hintId}>
-        <h3 id={titleId}>{title}</h3>
+        <h3 id={titleId}>{title ?? t('crop.title')}</h3>
         <p id={hintId} className="parent-hint">
-          Sleep het kader of de hoeken tot alleen het kledingstuk erin staat.
+          {t('crop.hint')}
         </p>
         <div className="parent-crop-stage">
           <div
@@ -144,7 +141,7 @@ export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, titl
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
           >
-            {url ? <img src={url} alt="Foto om bij te snijden" draggable={false} /> : null}
+            {url ? <img src={url} alt={t('crop.imageAlt')} draggable={false} /> : null}
             <div className="parent-crop-shade" aria-hidden="true">
               <div style={position} />
             </div>
@@ -153,17 +150,17 @@ export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, titl
               style={position}
               tabIndex={0}
               role="group"
-              aria-label="Bijsnijkader. Verplaats met de pijltjestoetsen, Shift met pijltjes maakt het groter of kleiner."
+              aria-label={t('crop.boxLabel')}
               onKeyDown={onBoxKey}
               onPointerDown={(event) => startDrag('move', event)}
             >
               {CORNERS.map((corner) => (
                 <span
-                  key={corner.mode}
-                  className={`parent-crop-handle is-${corner.mode}`}
+                  key={corner}
+                  className={`parent-crop-handle is-${corner}`}
                   aria-hidden="true"
-                  data-corner={corner.label}
-                  onPointerDown={(event) => startDrag(corner.mode, event)}
+                  data-corner={t(`crop.corners.${corner}`)}
+                  onPointerDown={(event) => startDrag(corner, event)}
                 />
               ))}
             </div>
@@ -171,15 +168,15 @@ export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, titl
         </div>
         <div className="parent-crop-actions">
           <button ref={confirmRef} type="button" onClick={() => onCrop(rect)}>
-            Bijsnijden
+            {t('crop.confirm')}
           </button>
           {onWholePhoto ? (
             <button type="button" className="secondary" onClick={onWholePhoto}>
-              Hele foto
+              {t('crop.wholePhoto')}
             </button>
           ) : null}
           <button type="button" className="secondary" onClick={onCancel}>
-            Annuleren
+            {t('crop.cancel')}
           </button>
         </div>
       </div>

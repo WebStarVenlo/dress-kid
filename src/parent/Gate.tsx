@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import type { FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import type { StoredPin } from '../domain/types'
 import { IconArrowLeft, IconLock } from '../shared/icons'
@@ -21,7 +22,7 @@ export function randomSum(): Sum {
 interface GateProps {
   sum: Sum
   onUnlock: () => void
-  /** Opslag waaruit de ouder-PIN wordt gelezen; standaard de gedeelde opslag van de app. */
+  /** Storage the parent PIN is read from; defaults to the app's shared storage. */
   store?: WardrobeStore
 }
 
@@ -29,14 +30,15 @@ type PinState = { status: 'loading' } | { status: 'none' } | { status: 'set'; pi
 type View = 'main' | 'forgot' | 'removed'
 
 /**
- * Ouderslot. Zonder PIN: een som die een kind van 4 nog niet kan oplossen. Met PIN: de pincode, met
- * de som als uitweg als de PIN vergeten is (de PIN wordt dan verwijderd). Geen echte beveiliging.
+ * Parent gate. Without a PIN: a sum a 4-year-old cannot solve yet. With a PIN: the PIN code, with
+ * the sum as a way out if the PIN is forgotten (the PIN is then removed). Not real security.
  */
 export default function Gate({ sum, onUnlock, store }: GateProps) {
+  const { t } = useTranslation('parent')
   const activeStore = store ?? getStore()
   const [pinState, setPinState] = useState<PinState>({ status: 'loading' })
   const [view, setView] = useState<View>('main')
-  // Som al goed beantwoord terwijl de PIN nog werd geladen.
+  // Sum already answered correctly while the PIN was still loading.
   const [pendingUnlock, setPendingUnlock] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [removeError, setRemoveError] = useState(false)
@@ -50,7 +52,7 @@ export default function Gate({ sum, onUnlock, store }: GateProps) {
           if (!cancelled) setPinState(pin ? { status: 'set', pin } : { status: 'none' })
         },
         (error: unknown) => {
-          // Kan de PIN niet worden gelezen, dan valt het slot terug op de som.
+          // If the PIN cannot be read, the gate falls back to the sum.
           console.error(error)
           if (!cancelled) setPinState({ status: 'none' })
         },
@@ -84,43 +86,43 @@ export default function Gate({ sum, onUnlock, store }: GateProps) {
     content = (
       <div className="parent-card">
         <p role="status" className="parent-ok">
-          De pincode is verwijderd.
+          {t('gate.pinRemoved')}
         </p>
-        <p>Je kunt een nieuwe pincode instellen onder Instellingen.</p>
+        <p>{t('gate.pinRemovedHint')}</p>
         <button type="button" autoFocus onClick={onUnlock}>
-          Verder
+          {t('gate.continue')}
         </button>
       </div>
     )
   } else if (pinState.status === 'set' && view === 'forgot') {
     content = (
       <>
-        <p>Pincode vergeten? Los de som op. De pincode wordt dan verwijderd en je kunt verder.</p>
-        <SumForm sum={sum} submitLabel="PIN verwijderen" busy={removing} onSolved={() => void removePin()} />
+        <p>{t('gate.forgotIntro')}</p>
+        <SumForm sum={sum} submitLabel={t('gate.removePin')} busy={removing} onSolved={() => void removePin()} />
         {removeError ? (
           <p role="alert" className="parent-error">
-            Het verwijderen van de pincode is niet gelukt. Probeer het nog eens.
+            {t('gate.removeFailed')}
           </p>
         ) : null}
         <button type="button" className="secondary" onClick={() => setView('main')}>
-          Terug naar pincode
+          {t('gate.backToPin')}
         </button>
       </>
     )
   } else if (pinState.status === 'set') {
     content = (
       <>
-        <p>Alleen voor ouders. Vul de pincode in om verder te gaan.</p>
+        <p>{t('gate.pinIntro')}</p>
         <PinEntry stored={pinState.pin} onSuccess={onUnlock} onForgot={() => setView('forgot')} />
       </>
     )
   } else {
     content = (
       <>
-        <p>Alleen voor ouders. Los de som op om verder te gaan.</p>
+        <p>{t('gate.sumIntro')}</p>
         <SumForm
           sum={sum}
-          submitLabel="Openen"
+          submitLabel={t('gate.open')}
           onSolved={() => {
             if (pinState.status === 'loading') setPendingUnlock(true)
             else onUnlock()
@@ -138,12 +140,12 @@ export default function Gate({ sum, onUnlock, store }: GateProps) {
           <span className="parent-lock" aria-hidden="true">
             <IconLock size={44} />
           </span>
-          <h1>Ouderbeheer</h1>
+          <h1>{t('gate.title')}</h1>
           {content}
         </div>
         <Link className="parent-link parent-link-quiet" to="/">
           <IconArrowLeft size={18} />
-          Terug
+          {t('gate.back')}
         </Link>
       </main>
     </div>
@@ -158,6 +160,7 @@ interface SumFormProps {
 }
 
 function SumForm({ sum, submitLabel, onSolved, busy = false }: SumFormProps) {
+  const { t } = useTranslation('parent')
   const [answer, setAnswer] = useState('')
   const [wrong, setWrong] = useState(false)
   const inputId = useId()
@@ -177,7 +180,7 @@ function SumForm({ sum, submitLabel, onSolved, busy = false }: SumFormProps) {
   return (
     <form className="parent-card" onSubmit={submit} noValidate>
       <label htmlFor={inputId} className="parent-sum">
-        Hoeveel is {sum.a} × {sum.b}?
+        {t('gate.sumQuestion', { a: sum.a, b: sum.b })}
       </label>
       <input
         id={inputId}
@@ -196,7 +199,7 @@ function SumForm({ sum, submitLabel, onSolved, busy = false }: SumFormProps) {
       />
       {wrong ? (
         <p id={errorId} role="alert" className="parent-error">
-          Dat klopt niet. Probeer het nog eens.
+          {t('gate.sumWrong')}
         </p>
       ) : null}
       <button type="submit" disabled={busy}>
@@ -214,13 +217,8 @@ interface PinEntryProps {
 
 type PinError = 'format' | 'wrong' | 'failed'
 
-const PIN_ERRORS: Record<PinError, string> = {
-  format: 'Vul de 4 cijfers van de pincode in.',
-  wrong: 'Dat is niet de goede pincode. Probeer het nog eens.',
-  failed: 'De pincode kan hier niet worden gecontroleerd. Gebruik “PIN vergeten?” om verder te gaan.',
-}
-
 function PinEntry({ stored, onSuccess, onForgot }: PinEntryProps) {
+  const { t } = useTranslation('parent')
   const [pin, setPin] = useState('')
   const [error, setError] = useState<PinError | undefined>()
   const [checking, setChecking] = useState(false)
@@ -228,7 +226,7 @@ function PinEntry({ stored, onSuccess, onForgot }: PinEntryProps) {
   const errorId = useId()
   const blocked = remaining > 0
 
-  // Tel de wachttijd af; daarna mag er weer geprobeerd worden.
+  // Count down the wait time; after that trying is allowed again.
   useEffect(() => {
     if (!blocked) return undefined
     const timer = setInterval(() => setRemaining(pinCooldownRemaining()), 1000)
@@ -268,7 +266,7 @@ function PinEntry({ stored, onSuccess, onForgot }: PinEntryProps) {
     <>
       <form className="parent-card" onSubmit={(event) => void submit(event)} noValidate>
         <PinField
-          label="Pincode"
+          label={t('gate.pinLabel')}
           value={pin}
           onChange={(value) => {
             setPin(value)
@@ -281,23 +279,23 @@ function PinEntry({ stored, onSuccess, onForgot }: PinEntryProps) {
         />
         {error ? (
           <p id={errorId} role="alert" className="parent-error">
-            {PIN_ERRORS[error]}
+            {t(`gate.pinErrors.${error}`)}
           </p>
         ) : null}
         {blocked ? (
           <>
             <p role="alert" className="parent-error">
-              Te vaak een verkeerde pincode. Wacht even en probeer het dan opnieuw.
+              {t('gate.tooManyAttempts')}
             </p>
-            <p className="parent-hint">Nog {Math.ceil(remaining / 1000)} seconden.</p>
+            <p className="parent-hint">{t('gate.secondsLeft', { seconds: Math.ceil(remaining / 1000) })}</p>
           </>
         ) : null}
         <button type="submit" disabled={blocked || checking}>
-          Ontgrendelen
+          {t('gate.unlock')}
         </button>
       </form>
       <button type="button" className="pin-link-button" onClick={onForgot}>
-        PIN vergeten?
+        {t('gate.forgotPin')}
       </button>
     </>
   )
