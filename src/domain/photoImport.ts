@@ -3,7 +3,7 @@
 /** Maximale grootte van één foto (gelijk aan de limiet in de back-up). */
 export const MAX_IMPORT_BYTES = 10 * 1024 * 1024
 
-export type PhotoImportErrorCode = 'invalid-url' | 'blocked' | 'not-image' | 'too-large' | 'http'
+export type PhotoImportErrorCode = 'invalid-url' | 'blocked' | 'not-image' | 'too-large' | 'http' | 'timeout'
 
 export class PhotoImportError extends Error {
   readonly code: PhotoImportErrorCode
@@ -50,17 +50,19 @@ function parseHttpUrl(text: string): URL | null {
 export function imageUrlFromDataTransfer(dt: DataTransfer | null): string | null {
   if (!dt || imageFilesFromDataTransfer(dt).length > 0) return null
 
+  // Webshopfoto's zitten vaak in een <a href=productpagina>: de <img src> gaat dan voor.
+  const html = dt.getData('text/html')
+  if (html) {
+    const src = new DOMParser().parseFromString(html, 'text/html').querySelector('img[src]')?.getAttribute('src')
+    // Alleen absolute http(s)-links; relatieve links en data:-links worden genegeerd.
+    const url = src ? parseHttpUrl(src) : null
+    if (url) return url.href
+  }
+
   const uriList = dt.getData('text/uri-list')
   for (const line of uriList.split(/\r?\n/)) {
     if (line.startsWith('#')) continue
     const url = parseHttpUrl(line)
-    if (url) return url.href
-  }
-
-  const html = dt.getData('text/html')
-  if (html) {
-    const src = new DOMParser().parseFromString(html, 'text/html').querySelector('img[src]')?.getAttribute('src')
-    const url = src ? parseHttpUrl(src) : null
     if (url) return url.href
   }
 
@@ -72,35 +74,80 @@ export function imageUrlFromDataTransfer(dt: DataTransfer | null): string | null
   return null
 }
 
-/** Haalt een afbeelding op van een http(s)-link. Gooit een PhotoImportError. */
+/** Maximale duur van het ophalen van één foto. */
+export const FETCH_TIMEOUT_MS = 15_000
+
+const isAbortError = (error: unknown) => error instanceof DOMException && error.name === 'AbortError'
+
+/** Leest de body in stukken en stopt zodra de limiet is overschreden. */
+async function readLimited(response: Response, type: string): Promise<Blob> {
+  const body = response.body
+  if (!body) return response.blob()
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > MAX_IMPORT_BYTES) {
+      void reader.cancel().catch(() => undefined)
+      throw new PhotoImportError('too-large')
+    }
+    chunks.push(value)
+  }
+  return new Blob(chunks as BlobPart[], { type })
+}
+
+/** Haalt een afbeelding op van een http(s)-link. Gooit een PhotoImportError (of een AbortError bij annuleren). */
 export async function fetchImageFromUrl(url: string, signal?: AbortSignal): Promise<Blob> {
   const parsed = parseHttpUrl(url)
   if (!parsed) throw new PhotoImportError('invalid-url')
 
-  let response: Response
-  try {
-    response = await fetch(parsed.href, { mode: 'cors', signal })
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error
-    // CORS-blokkade of geen verbinding: de browser maakt hier geen verschil tussen.
-    throw new PhotoImportError('blocked')
-  }
-  if (!response.ok) throw new PhotoImportError('http', response.status)
+  // AbortSignal.any ontbreekt in oudere browsers en jsdom: eigen controller met time-out en doorgegeven signal.
+  const controller = new AbortController()
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, FETCH_TIMEOUT_MS)
+  const onAbort = () => controller.abort()
+  if (signal?.aborted) controller.abort()
+  else signal?.addEventListener('abort', onAbort, { once: true })
 
-  const declared = response.headers.get('content-type') ?? ''
-  const length = Number(response.headers.get('content-length'))
-  if (Number.isFinite(length) && length > MAX_IMPORT_BYTES) throw new PhotoImportError('too-large')
-
-  let blob: Blob
   try {
-    blob = await response.blob()
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error
-    throw new PhotoImportError('blocked')
+    let response: Response
+    try {
+      response = await fetch(parsed.href, { mode: 'cors', signal: controller.signal, referrerPolicy: 'no-referrer' })
+    } catch (error) {
+      if (timedOut) throw new PhotoImportError('timeout')
+      if (isAbortError(error) || signal?.aborted) throw error instanceof Error ? error : new DOMException('Aborted', 'AbortError')
+      // CORS-blokkade of geen verbinding: de browser maakt hier geen verschil tussen.
+      throw new PhotoImportError('blocked')
+    }
+    if (!response.ok) throw new PhotoImportError('http', response.status)
+
+    const declared = response.headers.get('content-type') ?? ''
+    const lengthHeader = response.headers.get('content-length')
+    const length = lengthHeader === null ? NaN : Number(lengthHeader)
+    if (Number.isFinite(length) && length > MAX_IMPORT_BYTES) throw new PhotoImportError('too-large')
+
+    let blob: Blob
+    try {
+      blob = await readLimited(response, declared.split(';')[0]?.trim() ?? '')
+    } catch (error) {
+      if (error instanceof PhotoImportError) throw error
+      if (timedOut) throw new PhotoImportError('timeout')
+      if (isAbortError(error)) throw error
+      throw new PhotoImportError('blocked')
+    }
+    if (!isImage(declared) && !isImage(blob.type)) throw new PhotoImportError('not-image')
+    if (blob.size > MAX_IMPORT_BYTES) throw new PhotoImportError('too-large')
+    return isImage(blob.type) ? blob : new Blob([blob], { type: (declared.split(';')[0] ?? '').trim() })
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', onAbort)
   }
-  if (!isImage(declared) && !isImage(blob.type)) throw new PhotoImportError('not-image')
-  if (blob.size > MAX_IMPORT_BYTES) throw new PhotoImportError('too-large')
-  return isImage(blob.type) ? blob : new Blob([blob], { type: (declared.split(';')[0] ?? '').trim() })
 }
 
 /** Leest een afbeelding van het klembord; null als dat niet kan of er geen afbeelding op staat. */
@@ -133,6 +180,8 @@ export function photoImportMessage(error: unknown): string {
         return 'Deze link is geen foto. Kopieer de link van de afbeelding zelf, of kopieer de afbeelding en plak hem hier.'
       case 'too-large':
         return 'Deze foto is te groot (maximaal 10 MB).'
+      case 'timeout':
+        return 'Het ophalen duurde te lang. Probeer het opnieuw, of kopieer de afbeelding zelf en plak hem hier.'
       case 'http':
         return `De webshop gaf een foutmelding${error.status ? ` (${error.status})` : ''}. Probeer een andere link of kopieer de afbeelding zelf.`
     }

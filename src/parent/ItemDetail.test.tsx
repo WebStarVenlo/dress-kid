@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { cropPhoto, resizePhoto } from '../domain/image'
 import type { ClothingItem } from '../domain/types'
@@ -60,6 +60,18 @@ describe('ItemDetail bijsnijden', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hele foto' }))
     await waitFor(async () => expect(await storedPhotoText()).toBe('resized'))
     expect(cropPhoto).not.toHaveBeenCalled()
+  })
+
+  it('een geplakte afbeelding vervangt de foto via het bijsnijdvenster', async () => {
+    renderDetail()
+    const file = new File(['plak'], 'plak.png', { type: 'image/png' })
+    const event = createEvent.paste(document.body)
+    Object.defineProperty(event, 'clipboardData', {
+      value: { items: [{ kind: 'file', type: file.type, getAsFile: () => file }], files: [file], getData: () => '' },
+    })
+    fireEvent(document.body, event)
+    fireEvent.click(await screen.findByRole('button', { name: 'Hele foto' }))
+    await waitFor(async () => expect(await storedPhotoText()).toBe('resized'))
   })
 
   it('Annuleren laat de foto ongemoeid', async () => {

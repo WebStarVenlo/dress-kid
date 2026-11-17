@@ -292,6 +292,7 @@ describe('delen naar Dress Kid', () => {
     await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent(/^\/ouder$/))
 
     fireEvent.click(screen.getByRole('radio', { name: /Jurk/ }))
+    fireEvent.click(screen.getByRole('button', { name: "2 foto's toevoegen" }))
     await screen.findByText('Zojuist toegevoegd (2)')
     const items = await store.listItems()
     expect(items).toHaveLength(2)

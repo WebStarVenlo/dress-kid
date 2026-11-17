@@ -105,13 +105,12 @@ export default function AddFlow({ store, children, reload, onDone, initialFiles,
     await reload()
   }
 
-  function chooseCategory(next: Category) {
-    setCategory(next)
-    if (pending.length > 0) {
-      const files = pending
-      setPending([])
-      void processFiles(files, next)
-    }
+  /** Foto's uit de wachtrij verwerken, met de keuzes (soort, seizoen, maat) zoals ze nu staan. */
+  function addPending() {
+    if (pending.length === 0 || !category) return
+    const files = pending
+    setPending([])
+    void processFiles(files, category)
   }
 
   const ready = category !== undefined && !busy
@@ -122,7 +121,7 @@ export default function AddFlow({ store, children, reload, onDone, initialFiles,
         <h2 id="parent-add-title">Kleding toevoegen</h2>
       </div>
       <div className="parent-card parent-form">
-        <ChoiceGroup legend="Wat is het?" value={category} options={CATEGORY_OPTIONS} onChange={chooseCategory} variant="cards" />
+        <ChoiceGroup legend="Wat is het?" value={category} options={CATEGORY_OPTIONS} onChange={setCategory} variant="cards" />
         <ChoiceGroup
           legend="Wanneer draagt je kind het?"
           value={season}
@@ -151,6 +150,20 @@ export default function AddFlow({ store, children, reload, onDone, initialFiles,
               ? `${pending.length} foto's staan klaar. Kies eerst wat het is.`
               : 'Kies eerst wat het is.'}
         </p>
+      ) : pending.length > 0 ? (
+        <div className="parent-card">
+          <p className="parent-hint">
+            {pending.length === 1 ? '1 foto staat klaar.' : `${pending.length} foto's staan klaar.`} Controleer seizoen en maat en voeg ze dan toe.
+          </p>
+          <div className="parent-stack">
+            <button type="button" disabled={busy || cropping !== undefined} onClick={addPending}>
+              {pending.length === 1 ? 'Foto toevoegen' : `${pending.length} foto's toevoegen`}
+            </button>
+            <button type="button" className="secondary" disabled={busy} onClick={() => setPending([])}>
+              Weggooien
+            </button>
+          </div>
+        </div>
       ) : null}
       <PhotoImport onFiles={processFiles} disabled={busy || cropping !== undefined} initialUrl={initialUrl} />
       {cropping ? (

@@ -279,7 +279,7 @@ body:has(.parent-shell) {
 .parent-notice {
   grid-template-columns: auto 1fr;
   align-items: center;
-  background: #fff8e3;
+  background: var(--parent-soft);
   border-color: #f3dc94;
 }
 

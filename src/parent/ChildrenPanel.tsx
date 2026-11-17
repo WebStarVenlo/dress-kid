@@ -126,7 +126,11 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
   function startEdit(child: Child) {
     setError(undefined)
     setConfirmId(undefined)
-    setForm({ id: child.id, name: child.name, color: child.color, avatar: child.avatar,
+    setForm({
+      id: child.id,
+      name: child.name,
+      color: child.color,
+      avatar: child.avatar,
       stickersEnabled: stickersOn(child),
       sizes: toTexts(child.sizes),
     })
@@ -319,7 +323,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
             <span className="parent-switch-text">
               <span id={stickersTitleId} className="parent-switch-title">Stickers</span>
               <span id={stickersHelpId} className="parent-switch-help">
-                Het kind verdient een sticker na elke afgeronde dag.
+                Het kind verdient een sticker na elke afgeronde dag. Uit: geen stickerboek na 'Klaar'. Dagen tellen wel door.
               </span>
             </span>
             <span className="parent-switch" aria-hidden="true" />

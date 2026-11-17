@@ -88,17 +88,32 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
     latest.current = { onFiles, disabled, loading }
   })
 
+  const abortRef = useRef<AbortController | undefined>(undefined)
+  const dragDepth = useRef(0)
+
+  // Bij sluiten van het scherm stopt een lopende download.
+  useEffect(() => () => abortRef.current?.abort(), [])
+
   async function fromUrl(link: string) {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
     setMessage(undefined)
     setLoading(true)
     try {
-      const blob = await fetchImageFromUrl(link)
+      const blob = await fetchImageFromUrl(link, controller.signal)
+      if (controller.signal.aborted) return
       await latest.current.onFiles([new File([blob], nameFor(blob), { type: blob.type })])
+      if (controller.signal.aborted) return
       setUrl('')
     } catch (error) {
+      if (controller.signal.aborted) return
       setMessage(photoImportMessage(error))
     } finally {
-      setLoading(false)
+      if (abortRef.current === controller) {
+        abortRef.current = undefined
+        setLoading(false)
+      }
     }
   }
 
@@ -111,8 +126,10 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
     }
     const link = imageUrlFromDataTransfer(dt)
     if (link) {
+      // Niets automatisch ophalen: de gebruiker bepaalt zelf met "Ophalen".
+      setMessage(undefined)
       setUrl(link)
-      await fromUrl(link)
+      urlRef.current?.focus()
       return true
     }
     return false
@@ -136,7 +153,20 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
     }
     document.addEventListener('paste', onPaste)
     return () => document.removeEventListener('paste', onPaste)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Een net-misgelopen drop mag de app niet vervangen door de afbeelding zelf.
+  useEffect(() => {
+    const hasFiles = (event: globalThis.DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files')
+    const block = (event: globalThis.DragEvent) => {
+      if (hasFiles(event)) event.preventDefault()
+    }
+    document.addEventListener('dragover', block)
+    document.addEventListener('drop', block)
+    return () => {
+      document.removeEventListener('dragover', block)
+      document.removeEventListener('drop', block)
+    }
   }, [])
 
   async function pasteButton() {
@@ -152,6 +182,7 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
 
   function onDrop(event: DragEvent) {
     event.preventDefault()
+    dragDepth.current = 0
     setDragging(false)
     if (disabled || loading) return
     void handleTransfer(event.dataTransfer).then((ok) => {
@@ -164,7 +195,14 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
       event.preventDefault()
       setDragging(true)
     },
-    onDragLeave: () => setDragging(false),
+    onDragEnter: () => {
+      dragDepth.current += 1
+      setDragging(true)
+    },
+    onDragLeave: () => {
+      dragDepth.current = Math.max(0, dragDepth.current - 1)
+      if (dragDepth.current === 0) setDragging(false)
+    },
     onDrop,
   }
   const off = disabled || loading
@@ -226,6 +264,7 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
         <div {...dropProps} className={`parent-dropzone${dragging ? ' is-dragging' : ''}`}>
           {children}
         </div>
+        <p className="parent-hint">Plak of sleep een foto hierheen om te vervangen.</p>
         {controls}
       </div>
     )

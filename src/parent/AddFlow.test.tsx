@@ -4,6 +4,7 @@ import { cropPhoto, resizePhoto } from '../domain/image'
 import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 import AddFlow from './AddFlow'
+import PhotoImport from './PhotoImport'
 
 vi.mock('../domain/image', () => ({
   resizePhoto: vi.fn(async () => new Blob(['resized'], { type: 'image/jpeg' })),
@@ -82,8 +83,63 @@ describe('AddFlow van webshop', () => {
     renderFlow([new File(['a'], 'gedeeld.png', { type: 'image/png' })])
     expect(screen.getByText('1 foto staat klaar. Kies eerst wat het is.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: /Shirt/ }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(await store.listItems()).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Foto toevoegen' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Hele foto' }))
     await screen.findByText('Zojuist toegevoegd (1)')
+  })
+
+  it('gebruikt het seizoen dat na het kiezen van de soort is ingesteld', async () => {
+    renderFlow([new File(['a'], 'a.png', { type: 'image/png' }), new File(['b'], 'b.png', { type: 'image/png' })])
+    fireEvent.click(screen.getByRole('radio', { name: /Shirt/ }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Winter' }))
+    expect(await store.listItems()).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: "2 foto's toevoegen" }))
+    await screen.findByText('Zojuist toegevoegd (2)')
+    expect((await store.listItems()).map((i) => i.season)).toEqual(['winter', 'winter'])
+  })
+
+  it('gooit de wachtrij weg met Weggooien', async () => {
+    renderFlow([new File(['a'], 'a.png', { type: 'image/png' })])
+    fireEvent.click(screen.getByRole('radio', { name: /Shirt/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Weggooien' }))
+    expect(screen.queryByRole('button', { name: 'Foto toevoegen' })).not.toBeInTheDocument()
+    expect(await store.listItems()).toHaveLength(0)
+  })
+
+  it('zet een geplakte tekstlink in het veld zonder iets op te halen', () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    renderFlow()
+    const event = createEvent.paste(document.body)
+    Object.defineProperty(event, 'clipboardData', {
+      value: { items: [], files: [], getData: (type: string) => (type === 'text/plain' ? 'https://shop.nl/a.jpg' : '') },
+    })
+    fireEvent(document.body, event)
+    const field = screen.getByLabelText('Afbeeldingslink plakken')
+    expect(field).toHaveValue('https://shop.nl/a.jpg')
+    expect(field).toHaveFocus()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('negeert het resultaat als het scherm tijdens het ophalen sluit', async () => {
+    let resolve!: (r: Response) => void
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_u: string, init: RequestInit) => new Promise<Response>((res, rej) => {
+        resolve = res
+        init.signal?.addEventListener('abort', () => rej(new DOMException('Aborted', 'AbortError')))
+      })),
+    )
+    const onFiles = vi.fn()
+    const view = render(<PhotoImport onFiles={onFiles} />)
+    fireEvent.change(screen.getByLabelText('Afbeeldingslink plakken'), { target: { value: 'https://shop.nl/a.jpg' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ophalen' }))
+    view.unmount()
+    resolve(new Response('abc', { headers: { 'content-type': 'image/jpeg' } }))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(onFiles).not.toHaveBeenCalled()
   })
 })
 
