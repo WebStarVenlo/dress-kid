@@ -96,7 +96,7 @@
     var records = []
     for (var i = 0; i < share.files.length; i++) {
       var file = share.files[i]
-      records.push({ kind: 'photo', name: file.name || 'gedeeld', type: file.type, data: await readBytes(file), sharedAt: sharedAt })
+      records.push({ kind: 'photo', name: file.name || 'shared', type: file.type, data: await readBytes(file), sharedAt: sharedAt })
     }
     if (share.link) records.push({ kind: 'link', url: share.link, sharedAt: sharedAt })
 
