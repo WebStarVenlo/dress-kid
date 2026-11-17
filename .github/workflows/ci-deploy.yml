@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Handmatig opnieuw deployen naar GitHub Pages (vanaf main).
+  workflow_dispatch:
 
 # Standaard alleen lezen; de deploy-job vraagt zelf id-token aan.
 permissions:
@@ -107,3 +109,35 @@ jobs:
               --content-cache-control "no-cache" \
               --overwrite
           done
+
+  pages:
+    name: Deployen naar GitHub Pages
+    needs: build
+    # Alleen vanaf main: bij een push of handmatig gestart.
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # Geen twee Pages-deploys tegelijk; een lopende deploy wordt afgemaakt.
+    concurrency:
+      group: deploy-github-pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # De app gebruikt relatieve paden (base './') en HashRouter, dus hij werkt
+      # zonder aanpassingen onder https://<owner>.github.io/dress-kid/.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Publiceren
+        id: deployment
+        uses: actions/deploy-pages@v4

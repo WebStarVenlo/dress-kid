@@ -129,7 +129,13 @@ done
 
 ## Automatisch deployen met GitHub Actions
 
-De workflow `.github/workflows/ci-deploy.yml` doet bij elke pull request en elke push naar `main` de controles (lint, typecheck, tests, build). Bij een push naar `main` wordt daarna gedeployed naar Azure Storage. De deploy gebruikt OIDC, dus er staat geen wachtwoord of sleutel in GitHub.
+De workflow `.github/workflows/ci-deploy.yml` doet bij elke pull request en elke push naar `main` de controles (lint, typecheck, tests, build). Bij een push naar `main` wordt daarna gedeployed naar Azure Storage en naar GitHub Pages. De deploys gebruiken OIDC, dus er staat geen wachtwoord of sleutel in GitHub.
+
+### GitHub Pages
+
+De job `pages` publiceert dezelfde build op <https://webstarvenlo.github.io/dress-kid/>. Door de relatieve paden (`base: './'`) en `HashRouter` werkt de app daar zonder aanpassingen, inclusief camera en installeren als app (Pages is altijd HTTPS).
+
+Eenmalig instellen: zet in de repository onder **Settings → Pages → Build and deployment** de bron op **GitHub Actions**. Opnieuw deployen zonder nieuwe commit kan via **Actions → CI en deploy → Run workflow** (op `main`).
 
 ### Eenmalige Azure-configuratie
 
