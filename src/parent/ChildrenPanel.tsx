@@ -1,11 +1,11 @@
 import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
-import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
+import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, stickersOn } from '../domain/types'
 import { AVATAR_IDS, AVATAR_LABELS } from '../domain/avatars'
 import type { AvatarId } from '../domain/avatars'
 import type { Category, Child, ChildSizes } from '../domain/types'
 import { AnimalAvatar, AVATAR_COLORS } from '../shared/AnimalAvatar'
-import { IconCheck, IconPlus, IconTrash } from '../shared/icons'
+import { IconCheck, IconPlus, IconSticker, IconTrash } from '../shared/icons'
 import type { WardrobeStore } from '../storage'
 import { ChildAvatar, errorMessage } from './shared'
 
@@ -28,6 +28,7 @@ interface FormState {
   /** Gekozen dierfiguur; ontbreekt = geen (de UI toont dan de beginletter). */
   avatar?: AvatarId
   sizes: SizeTexts
+  stickersEnabled: boolean
 }
 
 /** "104, 110" -> ['104', '110']; komma's en puntkomma's scheiden maten. */
@@ -72,6 +73,8 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
   const colorId = useId()
   const errorId = useId()
   const sizesPrefix = useId()
+  const stickersTitleId = useId()
+  const stickersHelpId = useId()
 
   async function save(event: FormEvent) {
     event.preventDefault()
@@ -80,7 +83,13 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
     setError(undefined)
     try {
       // `avatar: undefined` wist bij wijzigen een eerder gekozen dierfiguur ("Geen").
-      const input = { name: form.name, color: form.color, avatar: form.avatar, sizes: toSizes(form.sizes) }
+      const input = {
+        name: form.name,
+        color: form.color,
+        avatar: form.avatar,
+        stickersEnabled: form.stickersEnabled,
+        sizes: toSizes(form.sizes),
+      }
       if (form.id) await store.updateChild(form.id, input)
       else await store.addChild(input)
       await reload()
@@ -111,13 +120,16 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
   function startAdd() {
     setError(undefined)
     setConfirmId(undefined)
-    setForm({ name: '', color: DEFAULT_COLOR, sizes: {} })
+    setForm({ name: '', color: DEFAULT_COLOR, stickersEnabled: true, sizes: {} })
   }
 
   function startEdit(child: Child) {
     setError(undefined)
     setConfirmId(undefined)
-    setForm({ id: child.id, name: child.name, color: child.color, avatar: child.avatar, sizes: toTexts(child.sizes) })
+    setForm({ id: child.id, name: child.name, color: child.color, avatar: child.avatar,
+      stickersEnabled: stickersOn(child),
+      sizes: toTexts(child.sizes),
+    })
   }
 
   const confirming = children.find((child) => child.id === confirmId)
@@ -292,6 +304,26 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
               </button>
             </div>
           </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.stickersEnabled}
+            aria-labelledby={stickersTitleId}
+            aria-describedby={stickersHelpId}
+            className={`parent-switch-row${form.stickersEnabled ? ' is-on' : ''}`}
+            onClick={() => setForm({ ...form, stickersEnabled: !form.stickersEnabled })}
+          >
+            <span className="parent-switch-icon" aria-hidden="true">
+              <IconSticker size={24} />
+            </span>
+            <span className="parent-switch-text">
+              <span id={stickersTitleId} className="parent-switch-title">Stickers</span>
+              <span id={stickersHelpId} className="parent-switch-help">
+                Het kind verdient een sticker na elke afgeronde dag.
+              </span>
+            </span>
+            <span className="parent-switch" aria-hidden="true" />
+          </button>
           <fieldset className="parent-sizes">
             <legend className="parent-field-label">Maten (meerdere mogelijk, gescheiden door komma&apos;s)</legend>
             {CATEGORIES.map((category) => (

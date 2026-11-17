@@ -105,6 +105,21 @@ describe('kinderen beheren', () => {
     expect(child?.sizes.bottom).toEqual(['104', '110'])
   })
 
+  it('zet stickers per kind aan of uit', async () => {
+    await store.addChild({ name: 'Sam', color: '#112233', sizes: {} })
+    await renderUnlocked()
+    await openChildren()
+    fireEvent.click(screen.getByRole('button', { name: 'Wijzig Sam' }))
+    const toggle = screen.getByRole('switch', { name: 'Stickers' })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await waitFor(async () => expect((await store.listChildren())[0]?.stickersEnabled).toBe(false))
+    fireEvent.click(await screen.findByRole('button', { name: 'Wijzig Sam' }))
+    expect(screen.getByRole('switch', { name: 'Stickers' })).toHaveAttribute('aria-checked', 'false')
+  })
+
   it('kiest bij het toevoegen een dierfiguur uit de kiezer', async () => {
     await renderUnlocked()
     await openChildren()

@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from '../domain/types'
+import { DEFAULT_SETTINGS, stickersOn } from '../domain/types'
 import type { AvatarId } from '../domain/avatars'
 import type { ClothingItem, NewChild, NewClothingItem, Settings, StoredPin } from '../domain/types'
 import type { WardrobeStore } from './api'
@@ -863,6 +863,47 @@ describe('createIndexedDbStore: import-grenzen', () => {
     const item = { ...(validBackup().items as object[])[0]!, photo: ok }
     await store.importBackup(jsonBlob(validBackup({ items: [item] })))
     expect((await store.listItems())[0]!.photo.size).toBe(Math.floor((9 * 1024 * 1024) / 3) * 3)
+  })
+})
+
+describe('createIndexedDbStore: stickers per kind', () => {
+  it('slaat stickersEnabled op en laat het weg als het niet is opgegeven', async () => {
+    const store = freshStore()
+    const a = await store.addChild(newChild({ stickersEnabled: false }))
+    const b = await store.addChild(newChild({ name: 'Sam' }))
+    expect(a.stickersEnabled).toBe(false)
+    expect(b).not.toHaveProperty('stickersEnabled')
+    const updated = await store.updateChild(b.id, { stickersEnabled: false })
+    expect(updated.stickersEnabled).toBe(false)
+    expect((await store.updateChild(b.id, { name: 'Sam2' })).stickersEnabled).toBe(false)
+    expect((await store.updateChild(b.id, { stickersEnabled: true })).stickersEnabled).toBe(true)
+  })
+
+  it('back-up round-trip behoudt stickersEnabled', async () => {
+    const source = freshStore()
+    await source.addChild(newChild({ stickersEnabled: false }))
+    await source.addChild(newChild({ name: 'Sam', stickersEnabled: true }))
+    await source.addChild(newChild({ name: 'Mo' }))
+    const target = freshStore()
+    await target.importBackup(await source.exportBackup())
+    expect((await target.listChildren()).map((c) => c.stickersEnabled)).toEqual([false, true, undefined])
+  })
+
+  it('een back-up zonder stickersEnabled importeert als stickers aan; een ongeldige waarde ook', async () => {
+    const store = freshStore()
+    await store.importBackup(
+      jsonBlob(
+        validBackup({
+          children: [
+            { id: 'k1', name: 'Noor', color: '#ff8800', sizes: {}, createdAt: 1 },
+            { id: 'k2', name: 'Sam', color: '#ff8800', sizes: {}, createdAt: 2, stickersEnabled: 'nee' },
+          ],
+        }),
+      ),
+    )
+    const children = await store.listChildren()
+    expect(children.map((c) => stickersOn(c))).toEqual([true, true])
+    expect(children.every((c) => !('stickersEnabled' in c))).toBe(true)
   })
 })
 

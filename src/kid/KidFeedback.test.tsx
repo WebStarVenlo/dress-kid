@@ -117,6 +117,20 @@ describe('KidApp: geluid en voorlezen', () => {
     await waitFor(() => expect(playSound).toHaveBeenLastCalledWith('sticker'), { timeout: 2500 })
   })
 
+  it('speelt geen sticker-pling en toont geen sticker als stickers uit staan', async () => {
+    const store = await newStore([])
+    await store.addChild({ name: 'Sam', color: '#3366ff', stickersEnabled: false, sizes: {} })
+    await add(store, 'top', 'Rood shirt')
+    const { container } = renderKid(store)
+    click(await screen.findByRole('button', { name: 'Rood shirt' }))
+    click(screen.getByRole('button', { name: /Klaar/ }))
+    expect(playSound).toHaveBeenLastCalledWith('done')
+    await new Promise((resolve) => setTimeout(resolve, 1800))
+    expect(playSound).not.toHaveBeenCalledWith('sticker')
+    expect(screen.queryByText(/Je hebt/)).not.toBeInTheDocument()
+    expect(container.querySelector('.kid-sticker')).toBeNull()
+  })
+
   it('speelt de sticker-animatie en -pling niet opnieuw bij nogmaals Klaar op dezelfde dag', async () => {
     const store = await newStore()
     await add(store, 'top', 'Rood shirt')

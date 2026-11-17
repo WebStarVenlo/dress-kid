@@ -96,8 +96,15 @@ export interface Child {
   color: string;
   /** Optioneel dierfiguur als profielplaatje; zonder avatar toont de UI bijv. de eerste letter. */
   avatar?: AvatarId;
+  /** Stickers voor dit kind; ontbreekt = aan (oude data en back-ups krijgen stickers). */
+  stickersEnabled?: boolean;
   sizes: ChildSizes;
   createdAt: number;
+}
+
+/** Staan de stickers voor dit kind aan? Ontbreekt de waarde, dan wel. */
+export function stickersOn(child: Pick<Child, 'stickersEnabled'>): boolean {
+  return child.stickersEnabled !== false;
 }
 
 export interface NewChild {
@@ -105,6 +112,8 @@ export interface NewChild {
   color: string;
   /** Optioneel dierfiguur; een onbekende waarde wordt genegeerd. */
   avatar?: AvatarId;
+  /** Optioneel; ontbreekt = aan. Een niet-boolean wordt genegeerd. */
+  stickersEnabled?: boolean;
   sizes: ChildSizes;
 }
 
