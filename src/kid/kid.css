@@ -1,9 +1,9 @@
 /*
- * Kindmodus in de stijl "Speelkast": dikke ronde vormen met een harde onderrand (indrukken =
- * zakken), zachte pastelvlekken op de achtergrond, Fredoka als koptekst en kleine sprongetjes.
- * Animaties gebruiken waar het kan de losse eigenschappen `translate`/`scale`/`rotate`, zodat ze
- * niet botsen met de `transform` van indrukken en kiezen. Alle beweging valt weg onder
- * prefers-reduced-motion (globale regel in global.css, plus de confetti hieronder).
+ * Kid mode in the "play cabinet" style: thick rounded shapes with a hard bottom edge (pressing =
+ * sinking), soft pastel blobs in the background, Fredoka for headings and small hops.
+ * Animations use the individual `translate`/`scale`/`rotate` properties where possible, so they
+ * do not clash with the `transform` used for pressing and choosing. All motion is dropped under
+ * prefers-reduced-motion (global rule in global.css, plus the confetti below).
  */
 
 .kid-app {
@@ -26,7 +26,7 @@
   overflow-x: clip;
 }
 
-/* ---------- achtergrond ---------- */
+/* ---------- background ---------- */
 
 .kid-backdrop {
   position: fixed;
@@ -135,7 +135,7 @@
   display: block;
 }
 
-/* ---------- kop met gids en spraakwolk ---------- */
+/* ---------- header with guide and speech bubble ---------- */
 
 .kid-header {
   display: grid;
@@ -232,7 +232,7 @@
   box-shadow: 0 6px 0 var(--surface-edge);
 }
 
-/* Het staartje wijst naar de gids: omhoog op smalle schermen, naar links op brede. */
+/* The tail points at the guide: up on narrow screens, left on wide ones. */
 .kid-bubble::before {
   content: '';
   position: absolute;
@@ -368,7 +368,7 @@
   }
 }
 
-/* ---------- laden, fouten en lege kast ---------- */
+/* ---------- loading, errors and empty wardrobe ---------- */
 
 .kid-status {
   flex: 1;
@@ -453,7 +453,7 @@
   text-decoration: none;
 }
 
-/* ---------- profielen ---------- */
+/* ---------- profiles ---------- */
 
 .kid-profiles {
   flex: 1;
@@ -491,7 +491,7 @@
   color: var(--ink);
 }
 
-/* Een zachte vlek in de kleur van het kind achter het dier. */
+/* A soft blob in the child's colour behind the animal. */
 .kid-profile::before {
   content: '';
   position: absolute;
@@ -540,7 +540,7 @@
   box-shadow: 0 0 0 var(--btn-edge);
 }
 
-/* ---------- kiezen ---------- */
+/* ---------- choosing ---------- */
 
 .kid-play {
   flex: 1;
@@ -661,7 +661,7 @@
   filter: grayscale(0.8);
 }
 
-/* Ook gedimd moet zichtbaar blijven welk tabblad open staat. */
+/* Even when dimmed, it must stay visible which tab is open. */
 .kid-tab--active.kid-tab--dimmed {
   opacity: 0.8;
   filter: grayscale(0.45);
@@ -789,7 +789,7 @@
   animation: kid-pop-in 0.45s var(--ease-bounce) backwards;
 }
 
-/* ---------- paspop ---------- */
+/* ---------- dress-up doll ---------- */
 
 .kid-dock {
   position: sticky;
@@ -904,7 +904,7 @@
   line-height: 1;
 }
 
-/* Kleine telefoons: paspop en Klaar iets compacter, zodat de vakjes in twee rijen passen. */
+/* Small phones: doll and Ready button slightly more compact, so the slots fit in two rows. */
 @media (max-width: 380px) {
   .kid-dock {
     gap: 8px;
@@ -938,7 +938,7 @@
   }
 }
 
-/* De foto die naar de paspop vliegt (wordt door flyPhoto aan <body> gehangen). */
+/* The photo that flies to the doll (flyPhoto attaches it to <body>). */
 .kid-fly {
   position: fixed;
   z-index: 50;
@@ -1076,7 +1076,7 @@
   }
 }
 
-/* ---------- feestscherm ---------- */
+/* ---------- celebration screen ---------- */
 
 .kid-party {
   flex: 1;
@@ -1107,7 +1107,7 @@
   height: 152px;
 }
 
-/* Zonnige gloed achter het dier. */
+/* Sunny glow behind the animal. */
 .kid-party__avatar::before {
   content: '';
   position: absolute;
@@ -1363,7 +1363,7 @@
   }
 }
 
-/* ---------- animaties ---------- */
+/* ---------- animations ---------- */
 
 @keyframes kid-pop-in {
   from {

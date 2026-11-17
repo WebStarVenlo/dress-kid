@@ -14,13 +14,13 @@ vi.mock('../domain/image', () => ({
 let dbCounter = 0
 let store: WardrobeStore
 
-/** Rendert de ouderomgeving direct ontgrendeld. */
+/** Renders the parent area directly unlocked. */
 async function renderUnlocked() {
   sessionStorage.setItem(UNLOCK_KEY, String(Date.now()))
   render(
-    <MemoryRouter initialEntries={['/ouder']}>
+    <MemoryRouter initialEntries={['/parent']}>
       <Routes>
-        <Route path="/ouder/*" element={<ParentApp store={store} makeSum={() => ({ a: 7, b: 6 })} />} />
+        <Route path="/parent/*" element={<ParentApp store={store} makeSum={() => ({ a: 7, b: 6 })} />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -72,7 +72,7 @@ describe('kinderen beheren', () => {
     expect(child?.color).toBe('#ff8800')
     expect(child?.sizes.top).toEqual(['104', '110'])
     expect(child?.sizes.shoes).toEqual(['28'])
-    // De hint over een ontbrekend kind is weg.
+    // The hint about a missing child is gone.
     fireEvent.click(screen.getByRole('button', { name: 'Kast' }))
     await screen.findByRole('button', { name: /Kleding toevoegen/ })
     expect(screen.queryByText('Nog geen kind aangemaakt.')).not.toBeInTheDocument()
@@ -126,7 +126,7 @@ describe('kinderen beheren', () => {
     await openChildren()
     fireEvent.click(screen.getByRole('button', { name: 'Kind toevoegen' }))
     const group = screen.getByRole('radiogroup', { name: 'Dierfiguur' })
-    // 12 dieren plus "Geen"; zonder keuze staat "Geen" aan.
+    // 12 animals plus "Geen"; without a choice, "Geen" is on.
     expect(within(group).getAllByRole('radio')).toHaveLength(13)
     expect(within(group).getByRole('radio', { name: 'Geen' })).toHaveAttribute('aria-checked', 'true')
     fireEvent.change(screen.getByLabelText('Naam'), { target: { value: 'Noor' } })
@@ -145,20 +145,20 @@ describe('kinderen beheren', () => {
     await renderUnlocked()
     await openChildren()
     fireEvent.click(await screen.findByRole('button', { name: 'Wijzig Sam' }))
-    // De bestaande keuze is voorgeselecteerd.
+    // The existing choice is preselected.
     expect(screen.getByRole('radio', { name: 'Vos' })).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(screen.getByRole('radio', { name: 'Uil' }))
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
-    // De lijst met "Wijzig"-knoppen staat ook zichtbaar terwijl het formulier open is; pas als het formulier
-    // dicht is, is het opslaan (inclusief herladen) klaar.
+    // The list with "Wijzig" buttons is also visible while the form is open; only once the form
+    // is closed is saving (including reloading) done.
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Kind wijzigen' })).not.toBeInTheDocument())
     expect((await store.listChildren())[0]?.avatar).toBe('owl')
 
     fireEvent.click(screen.getByRole('button', { name: 'Wijzig Sam' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Geen' }))
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
-    // De lijst met "Wijzig"-knoppen staat ook zichtbaar terwijl het formulier open is; pas als het formulier
-    // dicht is, is het opslaan (inclusief herladen) klaar.
+    // The list with "Wijzig" buttons is also visible while the form is open; only once the form
+    // is closed is saving (including reloading) done.
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Kind wijzigen' })).not.toBeInTheDocument())
     await waitFor(async () => expect((await store.listChildren())[0]?.avatar).toBeUndefined())
   })
@@ -203,7 +203,7 @@ describe('maat bij kleding', () => {
     fireEvent.change(screen.getByLabelText("Foto's kiezen uit galerij"), {
       target: { files: [new File(['a'], 'a.png', { type: 'image/png' })] },
     })
-    // Eén foto: eerst de bijsnijdvraag, "Hele foto" houdt het oude gedrag.
+    // One photo: first the crop question; "Hele foto" keeps the old behavior.
     fireEvent.click(screen.getByRole('button', { name: 'Hele foto' }))
     await screen.findByText('Zojuist toegevoegd (1)')
     const [item] = await store.listItems()

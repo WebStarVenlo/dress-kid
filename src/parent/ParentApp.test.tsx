@@ -27,12 +27,12 @@ function CurrentUrl() {
   return <output data-testid="url">{location.pathname + location.search}</output>
 }
 
-function renderParent(entry = '/ouder') {
+function renderParent(entry = '/parent') {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <CurrentUrl />
       <Routes>
-        <Route path="/ouder/*" element={<ParentApp store={store} makeSum={() => ({ a: 7, b: 6 })} />} />
+        <Route path="/parent/*" element={<ParentApp store={store} makeSum={() => ({ a: 7, b: 6 })} />} />
         <Route path="/" element={<p>kind</p>} />
       </Routes>
     </MemoryRouter>,
@@ -49,7 +49,7 @@ async function unlock() {
   await screen.findByRole('button', { name: 'Kleding toevoegen' })
 }
 
-/** Zet een deling klaar zoals public/share-target-sw.js dat doet. */
+/** Stages a share the way public/share-target-sw.js does. */
 async function putShared(records: object[]) {
   const db = await openDB(SHARE_DB_NAME, SHARE_DB_VERSION, {
     upgrade(upgrading) {
@@ -98,7 +98,7 @@ describe('ouderslot', () => {
 
   it('vraagt om de PIN van de meegegeven opslag en ontgrendelt met de juiste', async () => {
     resetPinAttempts()
-    // Weinig iteraties houdt de test snel; de opgeslagen iteraties worden bij controle gebruikt.
+    // Few iterations keep the test fast; the stored iterations are used on verification.
     await store.setParentPin(await hashPin('2580', undefined, 1000))
     renderParent()
     const field = await screen.findByLabelText('Pincode')
@@ -152,7 +152,7 @@ describe('ouderslot', () => {
   it('vergrendelt weer als de route wordt verlaten, maar niet in StrictMode-remount', async () => {
     const { unmount } = render(
       <StrictMode>
-        <MemoryRouter initialEntries={['/ouder']}>
+        <MemoryRouter initialEntries={['/parent']}>
           <ParentApp store={store} makeSum={() => ({ a: 7, b: 6 })} />
         </MemoryRouter>
       </StrictMode>,
@@ -281,15 +281,15 @@ describe('toevoegen', () => {
 describe('delen naar Dress Kid', () => {
   it('opent na het ouderslot het toevoegscherm met de gedeelde foto\'s', async () => {
     await putShared([sharedPhoto('jurk.png'), sharedPhoto('shirt.png')])
-    renderParent('/ouder?gedeeld=1')
-    // Achter het slot blijven de foto's wachten.
+    renderParent('/parent?shared=1')
+    // Behind the gate the photos keep waiting.
     expect(screen.getByLabelText(/Hoeveel is 7 × 6/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(/Hoeveel is 7 × 6/), { target: { value: '42' } })
     fireEvent.click(screen.getByRole('button', { name: 'Openen' }))
 
     expect(await screen.findByText("2 foto's staan klaar. Kies eerst wat het is.")).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Kleding toevoegen' })).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent(/^\/ouder$/))
+    await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent(/^\/parent$/))
 
     fireEvent.click(screen.getByRole('radio', { name: /Jurk/ }))
     fireEvent.click(screen.getByRole('button', { name: "2 foto's toevoegen" }))
@@ -297,7 +297,7 @@ describe('delen naar Dress Kid', () => {
     const items = await store.listItems()
     expect(items).toHaveLength(2)
     expect(items.every((i) => i.category === 'dress')).toBe(true)
-    // De wachtrij is leeg: niet nog eens toevoegen.
+    // The queue is empty: don't add again.
     expect(await takeShared()).toEqual({ files: [] })
   })
 
@@ -313,7 +313,7 @@ describe('delen naar Dress Kid', () => {
     sessionStorage.setItem(UNLOCK_KEY, String(Date.now()))
     render(
       <StrictMode>
-        <MemoryRouter initialEntries={['/ouder?gedeeld=1']}>
+        <MemoryRouter initialEntries={['/parent?shared=1']}>
           <ParentApp store={store} makeSum={() => ({ a: 7, b: 6 })} />
         </MemoryRouter>
       </StrictMode>,
@@ -324,14 +324,14 @@ describe('delen naar Dress Kid', () => {
   it('zet een gedeelde link zonder foto in het linkveld', async () => {
     await putShared([{ kind: 'link', url: 'https://shop.nl/jurk', sharedAt: Date.now() }])
     sessionStorage.setItem(UNLOCK_KEY, String(Date.now()))
-    renderParent('/ouder?gedeeld=1')
+    renderParent('/parent?shared=1')
     await waitFor(() => expect(screen.getByLabelText('Afbeeldingslink plakken')).toHaveValue('https://shop.nl/jurk'))
     expect(screen.getByText('Kies eerst wat het is.')).toBeInTheDocument()
   })
 
   it('opent met de vlag een leeg toevoegscherm als er niets bruikbaars meekwam', async () => {
     sessionStorage.setItem(UNLOCK_KEY, String(Date.now()))
-    renderParent('/ouder?gedeeld=1')
+    renderParent('/parent?shared=1')
     expect(await screen.findByRole('heading', { name: 'Kleding toevoegen' })).toBeInTheDocument()
     expect(screen.getByText('Kies eerst wat het is.')).toBeInTheDocument()
     expect(screen.getByLabelText('Afbeeldingslink plakken')).toHaveValue('')
@@ -409,7 +409,7 @@ describe('tabbalk', () => {
     await screen.findByRole('heading', { name: 'Kinderen' })
     expect(within(nav).getByRole('button', { name: 'Kinderen' })).toHaveAttribute('aria-current', 'page')
     expect(within(nav).getByRole('button', { name: 'Kast' })).not.toHaveAttribute('aria-current')
-    // De zwevende toevoegknop hoort alleen bij de kast.
+    // The floating add button only belongs to the wardrobe.
     expect(screen.queryByRole('button', { name: 'Kleding toevoegen' })).not.toBeInTheDocument()
 
     fireEvent.click(within(nav).getByRole('button', { name: 'Instellingen' }))
@@ -534,13 +534,13 @@ describe('instellingen en back-up', () => {
 
   it('valt terug op downloaden als delen niet kan of mislukt', async () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
-    // Geen share-ondersteuning
+    // No share support
     await openBackup()
     fireEvent.click(screen.getByRole('button', { name: 'Back-up maken' }))
     expect(await screen.findByText(/De back-up is gemaakt/)).toBeInTheDocument()
     expect(click).toHaveBeenCalledTimes(1)
 
-    // share() gooit een andere fout
+    // share() throws a different error
     stubPointer(true)
     const share = vi.fn().mockRejectedValue(new Error('niet toegestaan'))
     vi.stubGlobal('navigator', { ...navigator, share, canShare: () => true })
@@ -562,7 +562,7 @@ describe('persistente opslag bij toevoegen', () => {
     fireEvent.change(screen.getByLabelText("Foto's kiezen uit galerij"), {
       target: { files: [new File(['a'], 'a.png', { type: 'image/png' })] },
     })
-    // Eén foto: eerst de bijsnijdvraag, "Hele foto" houdt het oude gedrag.
+    // One photo: the crop question first, "Hele foto" keeps the old behavior.
     fireEvent.click(screen.getByRole('button', { name: 'Hele foto' }))
     await screen.findByText('Zojuist toegevoegd (1)')
     expect(persist).toHaveBeenCalledTimes(2)

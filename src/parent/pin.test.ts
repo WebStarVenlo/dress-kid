@@ -11,7 +11,7 @@ import {
   verifyPin,
 } from './pin'
 
-// Weinig iteraties houdt de tests snel; de standaard wordt apart gecontroleerd.
+// Few iterations keep the tests fast; the default is checked separately.
 const FAST = 1000
 
 afterEach(() => resetPinAttempts())
@@ -57,8 +57,8 @@ describe('hashPin en verifyPin', () => {
   })
 
   it('weigert een ongeldige PIN', async () => {
-    await expect(hashPin('12345', undefined, FAST)).rejects.toThrow('precies 4 cijfers')
-    await expect(hashPin('1234', undefined, 0)).rejects.toThrow()
+    await expect(hashPin('12345', undefined, FAST)).rejects.toMatchObject({ code: 'pinInvalidFormat' })
+    await expect(hashPin('1234', undefined, 0)).rejects.toMatchObject({ code: 'pinInvalidIterations' })
   })
 
   it('geeft false bij een beschadigde opgeslagen PIN', async () => {
@@ -78,7 +78,7 @@ describe('pogingen', () => {
     expect(registerFailedPinAttempt(now)).toBe(PIN_COOLDOWN_MS)
     expect(pinCooldownRemaining(now + 10_000)).toBe(PIN_COOLDOWN_MS - 10_000)
     expect(pinCooldownRemaining(now + PIN_COOLDOWN_MS)).toBe(0)
-    // Daarna begint het tellen opnieuw.
+    // After that, counting starts over.
     expect(registerFailedPinAttempt(now + PIN_COOLDOWN_MS)).toBe(0)
   })
 

@@ -124,7 +124,7 @@ describe('selectableItems', () => {
     ]
     expect(selectableItems(items, ALL, { dress: 'd1' }, 'top').map((i) => i.id)).toEqual(['t1', 't2'])
     expect(selectableItems(items, ALL, { dress: 'd1' }, 'bottom').map((i) => i.id)).toEqual(['b1'])
-    // Een shirt die niet bij de gekozen broek past blijft wel verborgen.
+    // A shirt that does not fit the chosen bottom stays hidden.
     expect(selectableItems(items, ALL, { bottom: 'b1', dress: 'd1' }, 'dress').map((i) => i.id)).toEqual(['d1'])
   })
 
@@ -155,7 +155,7 @@ describe('selectableItems', () => {
 
   it('negeert een id die in het verkeerde vak staat', () => {
     const items = [item('t1', 'top', { excludedIds: ['s1'] }), item('s1', 'shoes')]
-    // s1 staat als "bottom" in de outfit: geen geldige keuze, dus geen beperking.
+    // s1 is in the outfit as "bottom": not a valid pick, so no restriction.
     expect(selectableItems(items, ALL, { bottom: 's1' }, 'top').map((i) => i.id)).toEqual(['t1'])
   })
 })
@@ -236,7 +236,7 @@ describe('pruneOutfit', () => {
   })
 
   it('houdt bij een botsing de eerdere categorie in CATEGORIES-volgorde', () => {
-    // top komt vóór shoes; uitsluiting staat alleen bij de schoen.
+    // top comes before shoes; the exclusion is only on the shoe.
     const items = [item('t', 'top'), item('s', 'shoes', { excludedIds: ['t'] }), item('j', 'jacket')]
     expect(pruneOutfit(items, ALL, { shoes: 's', top: 't', jacket: 'j' })).toEqual({ top: 't', jacket: 'j' })
   })

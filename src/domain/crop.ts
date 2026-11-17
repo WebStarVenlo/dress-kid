@@ -1,8 +1,8 @@
-/** Rekenwerk voor het bijsnijkader (los van React, dus makkelijk te testen). */
+/** Math for the crop frame (independent of React, so easy to test). */
 
 /**
- * Een uitsnede van een foto. Standaard in fracties (0..1) van de breedte/hoogte;
- * met `unit: 'px'` in pixels van de oorspronkelijke foto.
+ * A crop of a photo. By default in fractions (0..1) of the width/height;
+ * with `unit: 'px'` in pixels of the original photo.
  */
 export interface CropRect {
   x: number
@@ -12,7 +12,7 @@ export interface CropRect {
   unit?: 'fraction' | 'px'
 }
 
-/** Uitsnede in pixels, binnen de foto. */
+/** Crop in pixels, within the photo. */
 export interface PixelRect {
   sx: number
   sy: number
@@ -20,10 +20,10 @@ export interface PixelRect {
   sh: number
 }
 
-/** Beginkader: gecentreerd, 80% van de foto. */
+/** Initial frame: centred, 80% of the photo. */
 export const DEFAULT_CROP: CropRect = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 }
 
-/** Kleinste kader (als fractie), zodat de hoeken niet over elkaar heen schuiven. */
+/** Smallest frame (as a fraction), so the corners cannot slide over each other. */
 export const MIN_CROP = 0.1
 
 export type CropMode = 'move' | 'nw' | 'ne' | 'sw' | 'se'
@@ -31,8 +31,8 @@ export type CropMode = 'move' | 'nw' | 'ne' | 'sw' | 'se'
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 /**
- * Zet een uitsnede om naar pixels en houdt hem binnen de foto.
- * Geeft `null` als er (na het inperken) niets overblijft.
+ * Converts a crop to pixels and keeps it within the photo.
+ * Returns `null` if nothing is left (after clamping).
  */
 export function clampCropRect(rect: CropRect, width: number, height: number): PixelRect | null {
   if (![rect.x, rect.y, rect.w, rect.h, width, height].every(Number.isFinite)) return null
@@ -50,8 +50,8 @@ export function clampCropRect(rect: CropRect, width: number, height: number): Pi
 }
 
 /**
- * Verplaatst of vergroot/verkleint het kader (alles in fracties) met een verschuiving
- * `dx`/`dy`. Blijft binnen 0..1 en minimaal `min` groot.
+ * Moves or resizes the frame (everything in fractions) by an offset
+ * `dx`/`dy`. Stays within 0..1 and at least `min` in size.
  */
 export function adjustCropRect(start: CropRect, mode: CropMode, dx: number, dy: number, min = MIN_CROP): CropRect {
   if (mode === 'move') {

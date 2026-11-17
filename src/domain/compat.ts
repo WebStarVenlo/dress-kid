@@ -1,18 +1,18 @@
 /**
- * Pure domeinlogica: welke kledingstukken passen bij elkaar en wat mag het kind kiezen.
- * Geen I/O; alles werkt op gewone data.
+ * Pure domain logic: which items go together and what the child may pick.
+ * No I/O; everything works on plain data.
  */
 import { CATEGORIES } from './types'
 import type { Category, ClothingItem, CurrentSeason, Outfit, Settings } from './types'
 
-/** Past het kledingstuk bij het ingestelde seizoen? */
+/** Does the item fit the configured season? */
 export function isInSeason(item: Pick<ClothingItem, 'season'>, currentSeason: CurrentSeason): boolean {
   return currentSeason === 'all' || item.season === 'all' || item.season === currentSeason
 }
 
 /**
- * Mogen twee kledingstukken samen gedragen worden?
- * Uitsluitingen gelden symmetrisch, ook als maar één kant de ander noemt.
+ * May two items be worn together?
+ * Exclusions are symmetric, even if only one side mentions the other.
  */
 export function isCompatible(
   a: Pick<ClothingItem, 'id' | 'excludedIds'>,
@@ -27,12 +27,12 @@ const SLOT_CONFLICTS: Partial<Record<Category, readonly Category[]>> = {
   bottom: ['dress'],
 }
 
-/** Categorieën die niet tegelijk met deze categorie gekozen kunnen worden. */
+/** Categories that cannot be picked at the same time as this category. */
 export function conflictingCategories(category: Category): Category[] {
   return [...(SLOT_CONFLICTS[category] ?? [])]
 }
 
-/** Kledingstukken die nu aangetrokken kunnen worden: beschikbaar en in het seizoen. */
+/** Items that can be worn now: available and in season. */
 export function wearableItems(items: readonly ClothingItem[], settings: Settings): ClothingItem[] {
   return items.filter((item) => item.available && isInSeason(item, settings.currentSeason))
 }
@@ -42,7 +42,7 @@ function sortByCreatedAt(items: ClothingItem[]): ClothingItem[] {
   return items.sort((a, b) => a.createdAt - b.createdAt)
 }
 
-/** De gekozen, nog bestaande en draagbare kledingstukken in de outfit (in CATEGORIES-volgorde). */
+/** The picked, still existing and wearable items in the outfit (in CATEGORIES order). */
 function chosenWearable(
   wearable: readonly ClothingItem[],
   outfit: Outfit,
@@ -59,9 +59,9 @@ function chosenWearable(
 }
 
 /**
- * Kledingstukken uit `category` waar het kind nu uit kan kiezen: draagbaar en passend bij
- * alles wat in de ándere categorieën gekozen is (behalve botsende vakken, die worden bij het
- * kiezen vervangen). Gesorteerd op createdAt.
+ * Items from `category` the child can pick from now: wearable and compatible with
+ * everything picked in the other categories (except conflicting slots, which get
+ * replaced when picking). Sorted by createdAt.
  */
 export function selectableItems(
   items: readonly ClothingItem[],
@@ -70,7 +70,7 @@ export function selectableItems(
   category: Category,
 ): ClothingItem[] {
   const wearable = wearableItems(items, settings)
-  // Keuzes in botsende vakken (jurk vs. shirt/broek) tellen niet mee: kiezen vervangt ze toch.
+  // Picks in conflicting slots (dress vs. shirt/bottom) do not count: picking replaces them anyway.
   const replaced = conflictingCategories(category)
   const others = chosenWearable(wearable, outfit)
     .filter((chosen) => chosen.category !== category && !replaced.includes(chosen.category))
@@ -83,8 +83,8 @@ export function selectableItems(
 }
 
 /**
- * Ruimt een outfit op: verwijdert id's die niet (meer) bestaan, niet draagbaar zijn, in het
- * verkeerde vak staan of botsen. Bij een botsing wint de categorie die eerder in CATEGORIES staat.
+ * Cleans up an outfit: removes ids that no longer exist, are not wearable, sit in the
+ * wrong slot or conflict. On a conflict the category that comes first in CATEGORIES wins.
  */
 export function pruneOutfit(items: readonly ClothingItem[], settings: Settings, outfit: Outfit): Outfit {
   const result: Outfit = {}
@@ -100,8 +100,8 @@ export function pruneOutfit(items: readonly ClothingItem[], settings: Settings, 
 }
 
 /**
- * Kiest een kledingstuk (of zet het uit als het al gekozen was). Botsende vakken
- * (jurk vs. shirt/broek) en niet-passende kledingstukken worden uit de outfit gehaald.
+ * Picks an item (or deselects it if it was already picked). Conflicting slots
+ * (dress vs. shirt/bottom) and incompatible items are removed from the outfit.
  */
 export function chooseItem(
   items: readonly ClothingItem[],
@@ -118,7 +118,7 @@ export function chooseItem(
   const byId = new Map(items.map((i) => [i.id, i]))
   const current = byId.get(item.id)
   if (!current || !wearableItems([current], settings).length) {
-    // Niet (meer) bestaand of niet draagbaar: niets kiezen, alleen opruimen.
+    // No longer existing or not wearable: pick nothing, only clean up.
     return pruneOutfit(items, settings, outfit)
   }
   const conflicts = conflictingCategories(current.category)
@@ -134,21 +134,21 @@ export function chooseItem(
   return pruneOutfit(items, settings, next)
 }
 
-/** Categorieën (in vaste volgorde) met minstens één draagbaar kledingstuk. */
+/** Categories (in fixed order) with at least one wearable item. */
 export function visibleCategories(items: readonly ClothingItem[], settings: Settings): Category[] {
   const present = new Set(wearableItems(items, settings).map((item) => item.category))
   return CATEGORIES.filter((category) => present.has(category))
 }
 
-/** Is de outfit compleet? (shirt én broek/rok) of een jurk. */
+/** Is the outfit complete? (shirt and bottom) or a dress. */
 export function isOutfitComplete(outfit: Outfit): boolean {
   return Boolean((outfit.top && outfit.bottom) || outfit.dress)
 }
 
 /**
- * Is de outfit klaar, gemeten aan wat er nu echt draagbaar is? Klaar als er een jurk is, of als
- * elk van shirt en broek/rok dat te kiezen valt gekozen is. Er moet minstens één kledingstuk
- * gekozen zijn. Zo blijft het kind niet hangen als er bijv. geen enkele broek draagbaar is.
+ * Is the outfit done, measured against what is actually wearable now? Done if there is a dress, or if
+ * each of shirt and bottom that can be picked has been picked. At least one item must be
+ * picked. This keeps the child from getting stuck when e.g. no bottom at all is wearable.
  */
 export function isOutfitReady(items: readonly ClothingItem[], settings: Settings, outfit: Outfit): boolean {
   const wearable = wearableItems(items, settings)
@@ -162,7 +162,7 @@ export function isOutfitReady(items: readonly ClothingItem[], settings: Settings
   return !missing
 }
 
-/** Lokale datum als YYYY-MM-DD. */
+/** Local date as YYYY-MM-DD. */
 export function todayKey(now: Date = new Date()): string {
   const year = String(now.getFullYear()).padStart(4, '0')
   const month = String(now.getMonth() + 1).padStart(2, '0')

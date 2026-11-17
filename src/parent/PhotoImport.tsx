@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { DragEvent, ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   canReadClipboardImage,
   fetchImageFromUrl,
@@ -12,59 +13,60 @@ import { detectPlatform } from '../domain/platform'
 import type { Platform } from '../domain/platform'
 
 interface Props {
-  /** Verwerkt de binnengehaalde foto's. */
+  /** Handles the imported photos. */
   onFiles: (files: File[]) => void | Promise<void>
   disabled?: boolean
-  /** Compacte weergave (zonder uitleg en kader). */
+  /** Compact display (without explanation and frame). */
   compact?: boolean
-  /** Inhoud van het sleepvlak, bv. een foto. Zonder inhoud een eigen vlak. */
+  /** Content of the drop zone, e.g. a photo. Without content, a drop zone of its own. */
   children?: ReactNode
-  /** Beginwaarde van het linkveld (bv. een gedeelde link); wordt niet automatisch opgehaald. */
+  /** Initial value of the link field (e.g. a shared link); is not fetched automatically. */
   initialUrl?: string
-  /** Voor welk apparaat de uitleg is; standaard herkend uit de browser. */
+  /** Which device the instructions are for; detected from the browser by default. */
   platform?: Platform
 }
 
 interface Steps {
-  label: string
-  steps: string[]
-  note?: string
+  label: `photoImport.platforms.${Platform}`
+  steps: readonly (
+    | 'photoImport.steps.ios1'
+    | 'photoImport.steps.ios2'
+    | 'photoImport.steps.android1'
+    | 'photoImport.steps.android2'
+    | 'photoImport.steps.desktop1'
+  )[]
+  note?: 'photoImport.steps.iosNote'
 }
 
-/** Korte uitleg per apparaat voor het kaartje "Van webshop". */
+/** Short instructions per device (translation keys) for the "From webshop" card. */
 export const WEBSHOP_STEPS: Record<Platform, Steps> = {
   ios: {
-    label: 'iPhone en iPad',
-    steps: [
-      "Druk in Safari lang op de foto → Kopieer → tik hier op 'Plak foto' (en daarna op 'Plakken').",
-      'Lukt dat niet? Maak een schermafbeelding, kies hem via Galerij en snijd hem bij.',
-    ],
-    note: 'Delen naar Dress Kid kan op iPhone niet.',
+    label: 'photoImport.platforms.ios',
+    steps: ['photoImport.steps.ios1', 'photoImport.steps.ios2'],
+    note: 'photoImport.steps.iosNote',
   },
   android: {
-    label: 'Android',
-    steps: [
-      'Druk lang op de foto → Delen → Dress Kid (app moet geïnstalleerd zijn).',
-      "Of: druk lang op de foto → Afbeelding kopiëren → tik hier op 'Plak foto'.",
-    ],
+    label: 'photoImport.platforms.android',
+    steps: ['photoImport.steps.android1', 'photoImport.steps.android2'],
   },
   desktop: {
-    label: 'Computer',
-    steps: ['Rechtsklik op de foto → Afbeelding kopiëren → Ctrl+V (Cmd+V op Mac) hier, of sleep de foto hierheen.'],
+    label: 'photoImport.platforms.desktop',
+    steps: ['photoImport.steps.desktop1'],
   },
 }
 
 const PLATFORMS: Platform[] = ['ios', 'android', 'desktop']
 
 function StepList({ steps }: { steps: Steps }) {
+  const { t } = useTranslation('parent')
   return (
     <>
       <ol className="parent-import-steps">
         {steps.steps.map((step) => (
-          <li key={step}>{step}</li>
+          <li key={step}>{t(step)}</li>
         ))}
       </ol>
-      {steps.note ? <p className="parent-hint">{steps.note}</p> : null}
+      {steps.note ? <p className="parent-hint">{t(steps.note)}</p> : null}
     </>
   )
 }
@@ -73,8 +75,9 @@ function nameFor(blob: Blob) {
   return `webshop.${blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg'}`
 }
 
-/** Plakken, slepen of een link ophalen; levert gewone File-objecten op. */
+/** Paste, drag or fetch a link; yields plain File objects. */
 export default function PhotoImport({ onFiles, disabled, compact, children, initialUrl, platform: platformProp }: Props) {
+  const { t } = useTranslation('parent')
   const [detected] = useState(detectPlatform)
   const platform = platformProp ?? detected
   const [url, setUrl] = useState(initialUrl ?? '')
@@ -91,7 +94,7 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
   const abortRef = useRef<AbortController | undefined>(undefined)
   const dragDepth = useRef(0)
 
-  // Bij sluiten van het scherm stopt een lopende download.
+  // Closing the screen stops a running download.
   useEffect(() => () => abortRef.current?.abort(), [])
 
   async function fromUrl(link: string) {
@@ -126,7 +129,7 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
     }
     const link = imageUrlFromDataTransfer(dt)
     if (link) {
-      // Niets automatisch ophalen: de gebruiker bepaalt zelf met "Ophalen".
+      // Don't fetch anything automatically: the user decides with "Fetch".
       setMessage(undefined)
       setUrl(link)
       urlRef.current?.focus()
@@ -155,8 +158,8 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
     return () => document.removeEventListener('paste', onPaste)
   }, [])
 
-  // Een net-misgelopen drop mag de app niet vervangen door de afbeelding of pagina zelf.
-  // Aanname: er is maar één PhotoImport tegelijk gemount (de listeners hangen aan document).
+  // A just-missed drop must not replace the app with the image or page itself.
+  // Assumption: only one PhotoImport is mounted at a time (the listeners attach to document).
   useEffect(() => {
     const isEditable = (target: EventTarget | null) =>
       target instanceof HTMLElement &&
@@ -181,7 +184,7 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
     try {
       const file = await readClipboardImage()
       if (file) await onFiles([file])
-      else setMessage('Er staat geen foto op het klembord. Kopieer eerst een afbeelding, of plak een link.')
+      else setMessage(t('photoImport.clipboardEmpty'))
     } catch (error) {
       setMessage(photoImportMessage(error))
     }
@@ -193,7 +196,7 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
     setDragging(false)
     if (disabled || loading) return
     void handleTransfer(event.dataTransfer).then((ok) => {
-      if (!ok) setMessage('Hier zat geen foto of afbeeldingslink in.')
+      if (!ok) setMessage(t('photoImport.dropEmpty'))
     })
   }
 
@@ -221,7 +224,7 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
       disabled={off}
       onClick={() => void pasteButton()}
     >
-      Plak foto
+      {t('photoImport.pastePhoto')}
     </button>
   ) : null
 
@@ -230,7 +233,7 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
       {pasteFirst ? paste : null}
       <div className="parent-import-url">
         <label htmlFor={urlId} className="parent-field-label">
-          Afbeeldingslink plakken
+          {t('photoImport.urlLabel')}
         </label>
         <div className="parent-import-row">
           <input
@@ -247,14 +250,14 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
             }}
           />
           <button type="button" className="secondary" disabled={off || url.trim() === ''} onClick={() => void fromUrl(url)}>
-            Ophalen
+            {t('photoImport.fetch')}
           </button>
         </div>
       </div>
       {pasteFirst ? null : paste}
       {loading ? (
         <p role="status" className="parent-progress">
-          Foto ophalen…
+          {t('photoImport.fetching')}
         </p>
       ) : null}
       {message ? (
@@ -271,7 +274,7 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
         <div {...dropProps} className={`parent-dropzone${dragging ? ' is-dragging' : ''}`}>
           {children}
         </div>
-        <p className="parent-hint">Plak of sleep een foto hierheen om te vervangen.</p>
+        <p className="parent-hint">{t('photoImport.compactHint')}</p>
         {controls}
       </div>
     )
@@ -279,21 +282,21 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
 
   return (
     <section className="parent-card parent-import" aria-labelledby={`${urlId}-title`}>
-      <h3 id={`${urlId}-title`}>Van webshop</h3>
+      <h3 id={`${urlId}-title`}>{t('photoImport.fromWebshop')}</h3>
       <div className="parent-import-help" data-platform={platform}>
         <StepList steps={WEBSHOP_STEPS[platform]} />
         <details className="parent-import-other">
-          <summary>Andere apparaten</summary>
+          <summary>{t('photoImport.otherDevices')}</summary>
           {PLATFORMS.filter((other) => other !== platform).map((other) => (
             <div key={other}>
-              <h4>{WEBSHOP_STEPS[other].label}</h4>
+              <h4>{t(WEBSHOP_STEPS[other].label)}</h4>
               <StepList steps={WEBSHOP_STEPS[other]} />
             </div>
           ))}
         </details>
       </div>
       <div {...dropProps} className={`parent-dropzone${dragging ? ' is-dragging' : ''}`}>
-        Of sleep een foto of afbeeldingslink hierheen
+        {t('photoImport.dropHint')}
       </div>
       {controls}
     </section>

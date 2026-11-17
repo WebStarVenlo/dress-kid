@@ -6,13 +6,13 @@ interface PinFieldProps {
   value: string
   onChange: (value: string) => void
   invalid?: boolean
-  /** Id van de foutmelding die bij dit veld hoort (alleen gebruikt als `invalid`). */
+  /** Id of the error message belonging to this field (only used when `invalid`). */
   errorId?: string
   disabled?: boolean
   autoFocus?: boolean
 }
 
-/** Invoerveld voor een pincode van 4 cijfers (verborgen tekens, numeriek toetsenbord). */
+/** Input field for a 4-digit PIN (masked characters, numeric keyboard). */
 export default function PinField({ label, value, onChange, invalid = false, errorId, disabled, autoFocus }: PinFieldProps) {
   const inputId = useId()
   return (

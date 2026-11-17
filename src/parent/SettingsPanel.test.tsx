@@ -34,7 +34,7 @@ afterEach(() => {
 })
 
 describe('geluid en voorlezen', () => {
-  /** Rendert het paneel met een levende `settings`-prop, zoals ParentApp dat doet. */
+  /** Renders the panel with a live `settings` prop, as ParentApp does. */
   async function renderLive(initial: Settings) {
     await store.saveSettings(initial)
     const loaded = await store.getSettings()

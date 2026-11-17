@@ -1,19 +1,19 @@
-name: CI en deploy
+name: CI and deploy
 
 on:
   pull_request:
   push:
     branches: [main]
-  # Handmatig opnieuw deployen naar GitHub Pages (vanaf main).
+  # Manually redeploy to GitHub Pages (from main).
   workflow_dispatch:
 
-# Standaard alleen lezen; de deploy-job vraagt zelf id-token aan.
+# Read-only by default; the deploy job requests the id-token itself.
 permissions:
   contents: read
 
 jobs:
   build:
-    name: Controleren en bouwen
+    name: Check and build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
       - run: npm test
       - run: npm run build
 
-      - name: dist als artifact bewaren
+      - name: Store dist as artifact
         uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -38,15 +38,15 @@ jobs:
           retention-days: 7
 
   deploy:
-    name: Deployen naar Azure Storage
+    name: Deploy to Azure Storage
     needs: build
-    # Alleen op main, en alleen als het Azure-opslagaccount is ingesteld.
+    # Only on main, and only if the Azure storage account is configured.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_STORAGE_ACCOUNT != ''
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
-    # Geen twee deploys tegelijk naar dezelfde container.
+    # No two deploys at the same time to the same container.
     concurrency:
       group: deploy-azure-storage
       cancel-in-progress: false
@@ -58,16 +58,16 @@ jobs:
           name: dist
           path: dist
 
-      - name: Inloggen bij Azure (OIDC)
+      - name: Log in to Azure (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Eerst alles met een hash in de naam (assets, iconen, workbox): die bestaan dan al
-      # wanneer de nieuwe index.html live gaat.
-      - name: Statische bestanden uploaden naar $web
+      # First everything with a hash in the name (assets, icons, workbox): those already exist
+      # when the new index.html goes live.
+      - name: Upload static files to $web
         run: |
           set -euo pipefail
           mkdir stage
@@ -82,10 +82,10 @@ jobs:
             -s stage \
             --overwrite
 
-      # Daarna de bestanden die altijd vers opgehaald moeten worden (PWA-updates), met
-      # no-cache direct bij het uploaden, zodat er geen moment is met heuristische caching.
-      # index.html gaat als laatste live.
-      - name: Index, service worker en manifest uploaden (no-cache)
+      # Then the files that must always be fetched fresh (PWA updates), with no-cache set
+      # directly on upload, so there is no moment with heuristic caching.
+      # index.html goes live last.
+      - name: Upload index, service worker and manifest (no-cache)
         run: |
           set -euo pipefail
           for entry in \
@@ -97,7 +97,7 @@ jobs:
             name="${entry%%|*}"
             type="${entry#*|}"
             if [ ! -f "dist/$name" ]; then
-              echo "dist/$name bestaat niet; overgeslagen."
+              echo "dist/$name does not exist; skipped."
               continue
             fi
             az storage blob upload \
@@ -112,9 +112,9 @@ jobs:
           done
 
   pages:
-    name: Deployen naar GitHub Pages
+    name: Deploy to GitHub Pages
     needs: build
-    # Alleen vanaf main: bij een push of handmatig gestart.
+    # Only from main: on a push or started manually.
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -123,7 +123,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    # Geen twee Pages-deploys tegelijk; een lopende deploy wordt afgemaakt.
+    # No two Pages deploys at the same time; a running deploy is completed.
     concurrency:
       group: deploy-github-pages
       cancel-in-progress: false
@@ -133,12 +133,12 @@ jobs:
           name: dist
           path: dist
 
-      # De app gebruikt relatieve paden (base './') en HashRouter, dus hij werkt
-      # zonder aanpassingen onder https://<owner>.github.io/dress-kid/.
+      # The app uses relative paths (base './') and HashRouter, so it works
+      # without changes under https://<owner>.github.io/dress-kid/.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
-      - name: Publiceren
+      - name: Publish
         id: deployment
         uses: actions/deploy-pages@v4

@@ -1,10 +1,12 @@
 import { useEffect, useId, useState } from 'react'
 import type { FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
+import { AppError } from '../i18n/AppError'
 import type { StoredPin } from '../domain/types'
 import type { WardrobeStore } from '../storage'
 import PinField from './PinField'
-import { INVALID_PIN_FORMAT, hashPin, isValidPinFormat, resetPinAttempts, verifyPin } from './pin'
 import { errorMessage } from './shared'
+import { hashPin, invalidPinFormatMessage, isValidPinFormat, resetPinAttempts, verifyPin } from './pin'
 import './pin.css'
 
 interface Props {
@@ -18,22 +20,19 @@ interface FormError {
   message: string
 }
 
-const MISMATCH = 'De twee nieuwe pincodes zijn niet hetzelfde.'
-const WRONG_CURRENT = 'De huidige pincode klopt niet.'
-const CRYPTO_FAILED = 'De pincode kan in deze browser niet worden verwerkt.'
-
-/** Afleiden of controleren van de PIN; een fout van Web Crypto wordt een Nederlandse melding. */
+/** Deriving or verifying the PIN; a Web Crypto failure becomes a user-facing message. */
 async function safely<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work()
   } catch (e) {
     console.error(e)
-    throw new Error(CRYPTO_FAILED, { cause: e })
+    throw new AppError('pinCryptoFailed', undefined, { cause: e })
   }
 }
 
-/** Instellingen voor de ouder-PIN: instellen, wijzigen en verwijderen. */
+/** Settings for the parent PIN: set, change and remove. */
 export default function PinSettings({ store }: Props) {
+  const { t } = useTranslation('settings')
   const [stored, setStored] = useState<StoredPin | null | undefined>()
   const [loadError, setLoadError] = useState(false)
   const [mode, setMode] = useState<Mode>('idle')
@@ -75,18 +74,18 @@ export default function PinSettings({ store }: Props) {
   }
 
   function checkNew(): FormError | undefined {
-    if (!isValidPinFormat(next)) return { field: 'next', message: INVALID_PIN_FORMAT }
-    if (next !== repeat) return { field: 'repeat', message: MISMATCH }
+    if (!isValidPinFormat(next)) return { field: 'next', message: invalidPinFormatMessage() }
+    if (next !== repeat) return { field: 'repeat', message: t('pin.mismatch') }
     return undefined
   }
 
   async function checkCurrent(): Promise<FormError | undefined> {
-    if (!isValidPinFormat(current)) return { field: 'current', message: INVALID_PIN_FORMAT }
-    // Lees opnieuw, zodat we tegen de PIN controleren die nu echt is opgeslagen.
+    if (!isValidPinFormat(current)) return { field: 'current', message: invalidPinFormatMessage() }
+    // Read again, so we check against the PIN that is actually stored now.
     const latest = await store.getParentPin()
     if (!latest) return undefined
     const ok = await safely(() => verifyPin(current, latest))
-    return ok ? undefined : { field: 'current', message: WRONG_CURRENT }
+    return ok ? undefined : { field: 'current', message: t('pin.wrongCurrent') }
   }
 
   async function run(validate: () => Promise<FormError | undefined>, save: () => Promise<StoredPin | null>, done: string) {
@@ -108,7 +107,7 @@ export default function PinSettings({ store }: Props) {
       reset('idle')
       setSuccess(done)
     } catch (e) {
-      setError({ message: errorMessage(e, 'Opslaan van de pincode is niet gelukt.') })
+      setError({ message: errorMessage(e, t('pin.saveFailed')) })
     } finally {
       setBusy(false)
     }
@@ -119,7 +118,7 @@ export default function PinSettings({ store }: Props) {
     void run(
       async () => checkNew(),
       () => safely(() => hashPin(next)),
-      'De pincode is ingesteld. Ouderbeheer vraagt voortaan om deze pincode.',
+      t('pin.doneSet'),
     )
   }
 
@@ -128,13 +127,13 @@ export default function PinSettings({ store }: Props) {
     void run(
       async () => (await checkCurrent()) ?? checkNew(),
       () => safely(() => hashPin(next)),
-      'De pincode is gewijzigd.',
+      t('pin.doneChanged'),
     )
   }
 
   function submitRemove(event: FormEvent) {
     event.preventDefault()
-    void run(checkCurrent, async () => null, 'De pincode is verwijderd. Ouderbeheer opent weer met een som.')
+    void run(checkCurrent, async () => null, t('pin.doneRemoved'))
   }
 
   const invalid = (field: Field) => error?.field === field
@@ -155,13 +154,13 @@ export default function PinSettings({ store }: Props) {
   })
   const newFields = (
     <>
-      <PinField label="Nieuwe pincode" {...fieldProps('next', next, setNext)} />
-      <PinField label="Herhaal nieuwe pincode" {...fieldProps('repeat', repeat, setRepeat)} />
+      <PinField label={t('pin.newPin')} {...fieldProps('next', next, setNext)} />
+      <PinField label={t('pin.repeatNew')} {...fieldProps('repeat', repeat, setRepeat)} />
     </>
   )
   const cancel = (
     <button type="button" className="secondary" disabled={busy} onClick={() => reset('idle')}>
-      Annuleren
+      {t('pin.cancel')}
     </button>
   )
 
@@ -169,38 +168,35 @@ export default function PinSettings({ store }: Props) {
   if (loadError) {
     body = (
       <p role="alert" className="parent-error">
-        De pincode-instelling kon niet worden geladen.
+        {t('pin.loadFailed')}
       </p>
     )
   } else if (stored === undefined) {
     body = (
       <p role="status" className="parent-hint">
-        Laden…
+        {t('pin.loading')}
       </p>
     )
   } else if (stored === null) {
     body = (
-      <form className="parent-card" onSubmit={submitSet} noValidate aria-label="PIN instellen">
-        <p>
-          Er is nog geen pincode. Ouderbeheer opent nu met een som. Met een pincode van 4 cijfers kun je het beter
-          afschermen.
-        </p>
+      <form className="parent-card" onSubmit={submitSet} noValidate aria-label={t('pin.setLabel')}>
+        <p>{t('pin.setIntro')}</p>
         {newFields}
         {errorBox}
         <button type="submit" disabled={busy}>
-          PIN instellen
+          {t('pin.setLabel')}
         </button>
       </form>
     )
   } else if (mode === 'change') {
     body = (
-      <form className="parent-card" onSubmit={submitChange} noValidate aria-label="PIN wijzigen">
-        <PinField label="Huidige pincode" autoFocus {...fieldProps('current', current, setCurrent)} />
+      <form className="parent-card" onSubmit={submitChange} noValidate aria-label={t('pin.changeLabel')}>
+        <PinField label={t('pin.currentPin')} autoFocus {...fieldProps('current', current, setCurrent)} />
         {newFields}
         {errorBox}
         <div className="pin-actions">
           <button type="submit" disabled={busy}>
-            Nieuwe PIN opslaan
+            {t('pin.changeSave')}
           </button>
           {cancel}
         </div>
@@ -208,13 +204,13 @@ export default function PinSettings({ store }: Props) {
     )
   } else if (mode === 'remove') {
     body = (
-      <form className="parent-card parent-confirm" onSubmit={submitRemove} noValidate aria-label="PIN verwijderen">
-        <p>Zonder pincode opent ouderbeheer weer met een som.</p>
-        <PinField label="Huidige pincode" autoFocus {...fieldProps('current', current, setCurrent)} />
+      <form className="parent-card parent-confirm" onSubmit={submitRemove} noValidate aria-label={t('pin.removeLabel')}>
+        <p>{t('pin.removeIntro')}</p>
+        <PinField label={t('pin.currentPin')} autoFocus {...fieldProps('current', current, setCurrent)} />
         {errorBox}
         <div className="pin-actions">
           <button type="submit" className="danger" disabled={busy}>
-            Ja, PIN verwijderen
+            {t('pin.removeYes')}
           </button>
           {cancel}
         </div>
@@ -223,13 +219,13 @@ export default function PinSettings({ store }: Props) {
   } else {
     body = (
       <div className="parent-card">
-        <p>Er is een pincode ingesteld. Ouderbeheer vraagt om deze pincode.</p>
+        <p>{t('pin.isSet')}</p>
         <div className="pin-actions">
           <button type="button" className="secondary" onClick={() => open('change')}>
-            PIN wijzigen
+            {t('pin.changeLabel')}
           </button>
           <button type="button" className="danger" onClick={() => open('remove')}>
-            PIN verwijderen
+            {t('pin.removeLabel')}
           </button>
         </div>
       </div>
@@ -238,7 +234,7 @@ export default function PinSettings({ store }: Props) {
 
   return (
     <section aria-labelledby="parent-pin-title">
-      <h3 id="parent-pin-title">Pincode</h3>
+      <h3 id="parent-pin-title">{t('pin.title')}</h3>
       {body}
       {success ? (
         <p role="status" className="parent-ok">

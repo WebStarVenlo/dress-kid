@@ -1,6 +1,7 @@
-/** Foto's uit een webshop binnenhalen: plakken, slepen of via een afbeeldingslink. */
+/** Fetching photos from a web shop: paste, drag or via an image link. */
+import { AppError, translateError } from '../i18n/AppError'
 
-/** Maximale grootte van één foto (gelijk aan de limiet in de back-up). */
+/** Maximum size of a single photo (equal to the limit in the backup). */
 export const MAX_IMPORT_BYTES = 10 * 1024 * 1024
 
 export type PhotoImportErrorCode = 'invalid-url' | 'blocked' | 'not-image' | 'too-large' | 'http' | 'timeout'
@@ -10,7 +11,7 @@ export class PhotoImportError extends Error {
   readonly status?: number
 
   constructor(code: PhotoImportErrorCode, status?: number) {
-    super(`Foto ophalen mislukt: ${code}`)
+    super(`Photo import failed: ${code}`)
     this.name = 'PhotoImportError'
     this.code = code
     this.status = status
@@ -19,7 +20,7 @@ export class PhotoImportError extends Error {
 
 const isImage = (type: string) => type.toLowerCase().startsWith('image/')
 
-/** Afbeeldingsbestanden uit een plak- of sleepactie (items en files, zonder dubbelen). */
+/** Image files from a paste or drag action (items and files, without duplicates). */
 export function imageFilesFromDataTransfer(dt: DataTransfer | null): File[] {
   if (!dt) return []
   const found: File[] = []
@@ -46,15 +47,15 @@ function parseHttpUrl(text: string): URL | null {
   }
 }
 
-/** Haalt een afbeeldingslink uit een plak- of sleepactie als er geen bestanden zijn. */
+/** Extracts an image link from a paste or drag action if there are no files. */
 export function imageUrlFromDataTransfer(dt: DataTransfer | null): string | null {
   if (!dt || imageFilesFromDataTransfer(dt).length > 0) return null
 
-  // Webshopfoto's zitten vaak in een <a href=productpagina>: de <img src> gaat dan voor.
+  // Web shop photos are often inside an <a href=product page>: the <img src> takes precedence then.
   const html = dt.getData('text/html')
   if (html) {
     const src = new DOMParser().parseFromString(html, 'text/html').querySelector('img[src]')?.getAttribute('src')
-    // Alleen absolute http(s)-links; relatieve links en data:-links worden genegeerd.
+    // Only absolute http(s) links; relative links and data: links are ignored.
     const url = src ? parseHttpUrl(src) : null
     if (url) return url.href
   }
@@ -74,12 +75,12 @@ export function imageUrlFromDataTransfer(dt: DataTransfer | null): string | null
   return null
 }
 
-/** Maximale duur van het ophalen van één foto. */
+/** Maximum duration of fetching a single photo. */
 export const FETCH_TIMEOUT_MS = 15_000
 
 const isAbortError = (error: unknown) => error instanceof DOMException && error.name === 'AbortError'
 
-/** Leest de body in stukken en stopt zodra de limiet is overschreden. */
+/** Reads the body in chunks and stops as soon as the limit is exceeded. */
 async function readLimited(response: Response, type: string): Promise<Blob> {
   const body = response.body
   if (!body) return response.blob()
@@ -99,12 +100,12 @@ async function readLimited(response: Response, type: string): Promise<Blob> {
   return new Blob(chunks as BlobPart[], { type })
 }
 
-/** Haalt een afbeelding op van een http(s)-link. Gooit een PhotoImportError (of een AbortError bij annuleren). */
+/** Fetches an image from an http(s) link. Throws a PhotoImportError (or an AbortError on cancel). */
 export async function fetchImageFromUrl(url: string, signal?: AbortSignal): Promise<Blob> {
   const parsed = parseHttpUrl(url)
   if (!parsed) throw new PhotoImportError('invalid-url')
 
-  // AbortSignal.any ontbreekt in oudere browsers en jsdom: eigen controller met time-out en doorgegeven signal.
+  // AbortSignal.any is missing in older browsers and jsdom: own controller with timeout and passed-through signal.
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
@@ -122,7 +123,7 @@ export async function fetchImageFromUrl(url: string, signal?: AbortSignal): Prom
     } catch (error) {
       if (timedOut) throw new PhotoImportError('timeout')
       if (isAbortError(error) || signal?.aborted) throw error instanceof Error ? error : new DOMException('Aborted', 'AbortError')
-      // CORS-blokkade of geen verbinding: de browser maakt hier geen verschil tussen.
+      // CORS block or no connection: the browser makes no distinction here.
       throw new PhotoImportError('blocked')
     }
     if (!response.ok) throw new PhotoImportError('http', response.status)
@@ -150,7 +151,7 @@ export async function fetchImageFromUrl(url: string, signal?: AbortSignal): Prom
   }
 }
 
-/** Leest een afbeelding van het klembord; null als dat niet kan of er geen afbeelding op staat. */
+/** Reads an image from the clipboard; null if that is not possible or there is no image on it. */
 export async function readClipboardImage(): Promise<File | null> {
   if (typeof navigator === 'undefined' || typeof navigator.clipboard?.read !== 'function') return null
   const items = await navigator.clipboard.read()
@@ -158,36 +159,38 @@ export async function readClipboardImage(): Promise<File | null> {
     const type = item.types.find(isImage)
     if (type) {
       const blob = await item.getType(type)
-      return new File([blob], `klembord.${type.split('/')[1] ?? 'png'}`, { type })
+      return new File([blob], `clipboard.${type.split('/')[1] ?? 'png'}`, { type })
     }
   }
   return null
 }
 
-/** Kan de "Plak foto"-knop werken in deze browser? */
+/** Can the "Paste photo" button work in this browser? */
 export const canReadClipboardImage = () =>
   typeof navigator !== 'undefined' && typeof navigator.clipboard?.read === 'function'
 
-/** Nederlandse melding bij een mislukte import. */
+/** Translated message for a failed import. */
 export function photoImportMessage(error: unknown): string {
   if (error instanceof PhotoImportError) {
     switch (error.code) {
       case 'invalid-url':
-        return 'Dit is geen geldige afbeeldingslink. Een link begint met http:// of https://.'
+        return translateError(new AppError('photoImportInvalidUrl'))
       case 'blocked':
-        return 'De webshop blokkeert het ophalen van deze foto. Rechtsklik (of druk lang) op de foto, kies "Afbeelding kopiëren" en plak hier (Ctrl+V). Of sla de foto op en kies hem via "Kies uit galerij".'
+        return translateError(new AppError('photoImportBlocked'))
       case 'not-image':
-        return 'Deze link is geen foto. Kopieer de link van de afbeelding zelf, of kopieer de afbeelding en plak hem hier.'
+        return translateError(new AppError('photoImportNotImage'))
       case 'too-large':
-        return 'Deze foto is te groot (maximaal 10 MB).'
+        return translateError(new AppError('photoImportTooLarge'))
       case 'timeout':
-        return 'Het ophalen duurde te lang. Probeer het opnieuw, of kopieer de afbeelding zelf en plak hem hier.'
+        return translateError(new AppError('photoImportTimeout'))
       case 'http':
-        return `De webshop gaf een foutmelding${error.status ? ` (${error.status})` : ''}. Probeer een andere link of kopieer de afbeelding zelf.`
+        return error.status
+          ? translateError(new AppError('photoImportHttpStatus', { status: error.status }))
+          : translateError(new AppError('photoImportHttp'))
     }
   }
   if (error instanceof DOMException && error.name === 'NotAllowedError') {
-    return 'Plakken is niet toegestaan. Gebruik Ctrl+V (of lang drukken en Plakken).'
+    return translateError(new AppError('photoImportClipboardDenied'))
   }
-  return 'De foto kon niet worden opgehaald.'
+  return translateError(new AppError('photoImportFailed'))
 }

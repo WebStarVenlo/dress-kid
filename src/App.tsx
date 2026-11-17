@@ -6,7 +6,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<KidApp />} />
-      <Route path="/ouder/*" element={<ParentApp />} />
+      <Route path="/parent/*" element={<ParentApp />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

@@ -11,11 +11,14 @@ export default defineConfig({
       registerType: 'autoUpdate',
       workbox: {
         globPatterns: ['**/*.{js,css,html,woff2,svg,png}'],
-        // Vangt de POST van "Delen → Dress Kid" af (zie share_target); relatief aan sw.js.
+        // Catches the POST from "Share → Dress Kid" (see share_target); relative to sw.js.
         importScripts: ['share-target-sw.js'],
       },
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
+        // NOTE: the manifest is generated at build time and is not translated by i18next.
+        // name, short_name, description (and the share_target text) are Dutch-only for now.
+        // They must be localized per language later (e.g. one manifest per locale).
         name: 'Dress Kid',
         short_name: 'Dress Kid',
         description: 'Kies zelf je kleren voor vandaag.',
@@ -23,8 +26,8 @@ export default defineConfig({
         display: 'standalone',
         start_url: './',
         scope: './',
-        // Android: verschijnt in het deelmenu als de app geïnstalleerd is. De service worker
-        // (public/share-target-sw.js) ontvangt de POST en stuurt door naar het ouderscherm.
+        // Android: appears in the share sheet when the app is installed. The service worker
+        // (public/share-target-sw.js) receives the POST and forwards to the parent screen.
         share_target: {
           action: './share-target',
           method: 'POST',

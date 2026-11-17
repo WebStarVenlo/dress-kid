@@ -1,13 +1,13 @@
 /**
- * Bewaart of het ouderslot is geopend, met een tijdstempel van de laatste activiteit.
- * Dit is geen echte beveiliging: het houdt alleen een jong kind uit de beheeromgeving.
+ * Remembers whether the parent lock has been opened, with a timestamp of the last activity.
+ * This is not real security: it only keeps a young child out of the management area.
  */
 
 export const UNLOCK_KEY = 'dress-kid-parent-unlocked'
-/** Na zoveel milliseconden zonder activiteit (of met een verborgen pagina) valt het slot weer dicht. */
+/** After this many milliseconds without activity (or with a hidden page) the lock closes again. */
 export const UNLOCK_TTL_MS = 5 * 60 * 1000
 
-/** Terugval als sessionStorage niet bruikbaar is (geblokkeerd, sommige privémodi). */
+/** Fallback when sessionStorage is unusable (blocked, some private modes). */
 let memoryStamp = 0
 
 function validStamp(stamp: number, now: number): boolean {
@@ -24,13 +24,13 @@ export function isUnlocked(now = Date.now()): boolean {
   return validStamp(stamp, now)
 }
 
-/** Zet het slot open en verlengt de geldigheid. */
+/** Opens the lock and extends its validity. */
 export function touchUnlock(now = Date.now()): void {
   memoryStamp = now
   try {
     sessionStorage.setItem(UNLOCK_KEY, String(now))
   } catch {
-    // De geheugenwaarde hierboven houdt het slot dan open.
+    // The in-memory value above keeps the lock open then.
   }
 }
 
@@ -39,6 +39,6 @@ export function lock(): void {
   try {
     sessionStorage.removeItem(UNLOCK_KEY)
   } catch {
-    // Niets te wissen.
+    // Nothing to clear.
   }
 }

@@ -1,7 +1,7 @@
 /*
- * Oudermodus: een rustiger, volwassen kamer in dezelfde familie als de kindmodus.
- * Lichte lila ondergrond, witte kaarten met dunne randen, paars voor acties en een kleinere "druk"
- * (--press) dan bij de kinderen. Alles hangt onder .parent-shell zodat het kind-deel niets merkt.
+ * Parent mode: a calmer, grown-up room in the same family as the child mode.
+ * Light lilac background, white cards with thin borders, purple for actions and a smaller "press"
+ * (--press) than for the children. Everything hangs under .parent-shell so the child part is unaffected.
  */
 
 .parent-shell {
@@ -21,7 +21,7 @@
   line-height: 1.45;
 }
 
-/* Ook bij overscroll en achter de adresbalk dezelfde ondergrond. */
+/* The same background on overscroll and behind the address bar. */
 body:has(.parent-shell) {
   background: #f6f3ff;
 }
@@ -61,7 +61,7 @@ body:has(.parent-shell) {
   margin: 0;
 }
 
-/* Basis voor alle knoppen in de ouderomgeving: kleiner, rustiger, met een lage onderrand. */
+/* Base for all buttons in the parent area: smaller, calmer, with a low bottom edge. */
 .parent-shell button {
   min-width: 52px;
   min-height: 52px;
@@ -111,7 +111,7 @@ body:has(.parent-shell) {
   box-shadow: 0 0 0 4px rgb(123 92 255 / 16%);
 }
 
-/* De paarse rand plus gloed is de focusaanduiding van invoervelden; geen dubbele ring. */
+/* The purple border plus glow is the focus indicator of input fields; no double ring. */
 .parent-shell input:focus-visible {
   outline: none;
 }
@@ -121,7 +121,7 @@ body:has(.parent-shell) {
   outline-offset: 2px;
 }
 
-/* Koptekst met merkteken en de link naar de kindmodus */
+/* Header with brand mark and the link to child mode */
 .parent-header {
   display: grid;
   gap: 10px;
@@ -177,7 +177,7 @@ body:has(.parent-shell) {
   background: var(--parent-soft);
 }
 
-/* Kaarten */
+/* Cards */
 .parent-card {
   background: var(--parent-card);
   border: 1.5px solid var(--parent-line);
@@ -275,7 +275,7 @@ body:has(.parent-shell) {
   display: none;
 }
 
-/* Melding "nog geen kind" en lege kast */
+/* "No child yet" notice and empty wardrobe */
 .parent-notice {
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -311,7 +311,7 @@ body:has(.parent-shell) {
   color: var(--grape);
 }
 
-/* Tabbalk onderaan */
+/* Tab bar at the bottom */
 .parent-nav {
   position: fixed;
   z-index: 30;
@@ -372,7 +372,7 @@ body:has(.parent-shell) {
   box-shadow: 0 2px 0 var(--grape-edge);
 }
 
-/* Zwevende knop "Kleding toevoegen" */
+/* Floating "Add clothing" button */
 .parent-shell .parent-fab {
   --btn-bg: var(--tangerine);
   --btn-edge: var(--tangerine-edge);
@@ -402,7 +402,7 @@ body:has(.parent-shell) {
   background: rgb(255 255 255 / 24%);
 }
 
-/* Kast als schappen */
+/* Wardrobe as shelves */
 .parent-wardrobe {
   padding-bottom: 72px;
 }
@@ -450,7 +450,7 @@ body:has(.parent-shell) {
   scroll-snap-align: start;
 }
 
-/* De plank waar de tegels op staan. */
+/* The shelf the tiles stand on. */
 .parent-shelf::after {
   content: '';
   display: block;
@@ -556,7 +556,7 @@ body:has(.parent-shell) {
   color: #fff;
 }
 
-/* Keuzes: chips, kaarten en segmentbalk */
+/* Choices: chips, cards and segmented bar */
 .parent-field {
   margin: 0;
 }
@@ -671,7 +671,7 @@ body:has(.parent-shell) {
   transform: none;
 }
 
-/* Foto-acties en toevoegen */
+/* Photo actions and adding */
 .parent-photo-actions,
 .parent-stack {
   display: flex;
@@ -762,7 +762,7 @@ body:has(.parent-shell) {
   border: 1.5px solid var(--parent-line);
 }
 
-/* Detail van een kledingstuk */
+/* Detail of a clothing item */
 .parent-detail-photo {
   background: #fff;
   border: 1.5px solid var(--parent-line);
@@ -785,7 +785,7 @@ body:has(.parent-shell) {
   margin-bottom: 4px;
 }
 
-/* Schakelaar (wasmand en geluid) */
+/* Switch (laundry basket and sound) */
 .parent-switch {
   position: relative;
   flex: none;
@@ -906,7 +906,7 @@ body:has(.parent-shell) {
   background: #fffafb;
 }
 
-/* Kinderen en dierfiguren */
+/* Children and animal figures */
 .parent-children {
   list-style: none;
   padding: 0;
@@ -1132,7 +1132,7 @@ body:has(.parent-shell) {
   font-size: 1.05rem;
 }
 
-/* Ouderslot */
+/* Parent gate */
 .parent-gate {
   display: grid;
   align-content: center;
@@ -1249,7 +1249,7 @@ body:has(.parent-shell) {
   text-align: center;
 }
 
-/* Tablet en breder: tabbalk wordt een zwevende pil, de rest krijgt meer lucht */
+/* Tablet and wider: tab bar becomes a floating pill, the rest gets more room */
 @media (min-width: 700px) {
   .parent-shell {
     font-size: 18px;
@@ -1319,7 +1319,7 @@ body:has(.parent-shell) {
   }
 }
 
-/* Foto van webshop: plakken, slepen, link */
+/* Photo from a webshop: paste, drag, link */
 .parent-import {
   display: grid;
   gap: 10px;
@@ -1381,7 +1381,7 @@ body:has(.parent-shell) {
   margin: 8px 0 4px;
 }
 
-/* iPhone/iPad: plakken via de knop is de hoofdroute (geen Ctrl+V). */
+/* iPhone/iPad: pasting via the button is the main route (no Ctrl+V). */
 .parent-shell .parent-paste-main {
   width: 100%;
   min-height: 60px;
@@ -1389,8 +1389,8 @@ body:has(.parent-shell) {
   font-weight: 800;
 }
 
-/* Bijsnijden */
-/* Dimt alles buiten het kader; los van het kader zodat de grepen niet worden afgeknipt. */
+/* Cropping */
+/* Dims everything outside the frame; separate from the frame so the handles are not clipped. */
 .parent-crop-shade {
   position: absolute;
   inset: 0;
@@ -1431,7 +1431,7 @@ body:has(.parent-shell) {
   place-items: center;
   background: var(--parent-soft);
   border-radius: 18px;
-  /* Ruimte voor de hoekgrepen die buiten de foto uitsteken. */
+  /* Room for the corner handles that stick out beyond the photo. */
   padding: 24px;
 }
 

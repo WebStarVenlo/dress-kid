@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, stickersOn } from '../domain/types'
 import { AVATAR_IDS, AVATAR_LABELS } from '../domain/avatars'
 import type { AvatarId } from '../domain/avatars'
@@ -21,17 +22,17 @@ const DEFAULT_COLOR = '#1c7ed6'
 type SizeTexts = Partial<Record<Category, string>>
 
 interface FormState {
-  /** Ontbreekt bij een nieuw kind. */
+  /** Absent for a new child. */
   id?: string
   name: string
   color: string
-  /** Gekozen dierfiguur; ontbreekt = geen (de UI toont dan de beginletter). */
+  /** Chosen animal figure; absent = none (the UI then shows the initial). */
   avatar?: AvatarId
   sizes: SizeTexts
   stickersEnabled: boolean
 }
 
-/** "104, 110" -> ['104', '110']; komma's en puntkomma's scheiden maten. */
+/** "104, 110" -> ['104', '110']; commas and semicolons separate sizes. */
 function parseSizes(text: string): string[] {
   return text
     .split(/[,;]/)
@@ -57,7 +58,7 @@ function toTexts(sizes: ChildSizes): SizeTexts {
   return texts
 }
 
-/** Korte samenvatting, bijv. "Shirt 104, 110 · Broek 104". */
+/** Short summary, e.g. "Shirt 104, 110 · Broek 104". */
 export function summarizeSizes(sizes: ChildSizes): string {
   return CATEGORIES.filter((category) => (sizes[category] ?? []).length > 0)
     .map((category) => `${CATEGORY_LABELS[category]} ${(sizes[category] ?? []).join(', ')}`)
@@ -65,6 +66,7 @@ export function summarizeSizes(sizes: ChildSizes): string {
 }
 
 export default function ChildrenPanel({ store, children, reload }: Props) {
+  const { t } = useTranslation('settings')
   const [form, setForm] = useState<FormState | undefined>()
   const [error, setError] = useState<string | undefined>()
   const [confirmId, setConfirmId] = useState<string | undefined>()
@@ -82,7 +84,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
     setBusy(true)
     setError(undefined)
     try {
-      // `avatar: undefined` wist bij wijzigen een eerder gekozen dierfiguur ("Geen").
+      // `avatar: undefined` clears a previously chosen animal figure ("Geen") when editing.
       const input = {
         name: form.name,
         color: form.color,
@@ -96,7 +98,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
       setForm(undefined)
     } catch (e) {
       console.error(e)
-      setError(errorMessage(e, 'Opslaan is niet gelukt.'))
+      setError(errorMessage(e, t('children.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -111,7 +113,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
       setConfirmId(undefined)
     } catch (e) {
       console.error(e)
-      setError(errorMessage(e, 'Verwijderen is niet gelukt.'))
+      setError(errorMessage(e, t('children.deleteFailed')))
     } finally {
       setBusy(false)
     }
@@ -141,12 +143,10 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
   return (
     <section aria-labelledby="parent-children-title">
       <div className="parent-title-row">
-        <h2 id="parent-children-title">Kinderen</h2>
+        <h2 id="parent-children-title">{t('children.title')}</h2>
       </div>
-      <p className="parent-lead">Maak voor ieder kind een profiel. Vul per soort kleding de maten in die het kind draagt.</p>
-      <p className="parent-hint">
-        Kleding zonder maat, of in een soort waarvoor geen maat is ingevuld, is voor dit kind altijd zichtbaar.
-      </p>
+      <p className="parent-lead">{t('children.lead')}</p>
+      <p className="parent-hint">{t('children.hint')}</p>
 
       {error && !form && !confirming ? (
         <p role="alert" className="parent-error">
@@ -157,9 +157,9 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
       {children.length === 0 && !form ? (
         <div className="parent-card parent-empty">
           <p>
-            <strong>Nog geen kinderen.</strong>
+            <strong>{t('children.emptyTitle')}</strong>
           </p>
-          <p>Voeg een kind toe, anders kan de kinderomgeving geen kleding laten zien.</p>
+          <p>{t('children.emptyBody')}</p>
         </div>
       ) : (
         <ul className="parent-children">
@@ -170,21 +170,21 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
                 <ChildAvatar child={child} size={56} />
                 <div className="parent-child-info">
                   <strong>{child.name}</strong>
-                  <span className="parent-hint">{summary || 'Geen maten ingevuld'}</span>
+                  <span className="parent-hint">{summary || t('children.noSizes')}</span>
                 </div>
                 <div className="parent-stack">
                   <button
                     type="button"
                     className="secondary"
-                    aria-label={`Wijzig ${child.name}`}
+                    aria-label={t('children.editAria', { name: child.name })}
                     onClick={() => startEdit(child)}
                   >
-                    Wijzigen
+                    {t('children.edit')}
                   </button>
                   <button
                     type="button"
                     className="danger"
-                    aria-label={`Verwijder ${child.name}`}
+                    aria-label={t('children.deleteAria', { name: child.name })}
                     onClick={() => {
                       setForm(undefined)
                       setError(undefined)
@@ -201,11 +201,8 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
       )}
 
       {confirming ? (
-        <div className="parent-card parent-confirm" role="alertdialog" aria-label="Verwijderen bevestigen">
-          <p>
-            Weet je zeker dat je {confirming.name} wilt verwijderen? De outfits van dit kind worden ook
-            verwijderd. De kleding blijft staan.
-          </p>
+        <div className="parent-card parent-confirm" role="alertdialog" aria-label={t('children.confirm.label')}>
+          <p>{t('children.confirm.text', { name: confirming.name })}</p>
           {error ? (
             <p role="alert" className="parent-error">
               {error}
@@ -213,10 +210,10 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
           ) : null}
           <div className="parent-stack">
             <button type="button" className="danger" disabled={busy} onClick={() => void remove(confirming.id)}>
-              Ja, verwijderen
+              {t('children.confirm.yes')}
             </button>
             <button type="button" className="secondary" onClick={() => setConfirmId(undefined)}>
-              Annuleren
+              {t('children.confirm.cancel')}
             </button>
           </div>
         </div>
@@ -224,7 +221,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
 
       {form ? (
         <form className="parent-card" onSubmit={(event) => void save(event)} aria-labelledby="parent-child-form-title">
-          <h3 id="parent-child-form-title">{form.id ? 'Kind wijzigen' : 'Kind toevoegen'}</h3>
+          <h3 id="parent-child-form-title">{form.id ? t('children.form.editTitle') : t('children.form.addTitle')}</h3>
           {error ? (
             <p role="alert" id={errorId} className="parent-error">
               {error}
@@ -232,7 +229,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
           ) : null}
           <div className="parent-field">
             <label htmlFor={nameId} className="parent-field-label">
-              Naam
+              {t('children.form.name')}
             </label>
             <input
               id={nameId}
@@ -246,7 +243,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
           </div>
           <div className="parent-field">
             <label htmlFor={colorId} className="parent-field-label">
-              Kleur
+              {t('children.form.color')}
             </label>
             <div className="parent-swatches">
               <input
@@ -261,16 +258,16 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
                   type="button"
                   className={`parent-swatch${form.color.toLowerCase() === color ? ' is-selected' : ''}`}
                   style={{ background: color }}
-                  aria-label={`Kleur ${color}`}
+                  aria-label={t('children.form.colorAria', { color })}
                   aria-pressed={form.color.toLowerCase() === color}
                   onClick={() => setForm({ ...form, color })}
                 />
               ))}
             </div>
           </div>
-          <div className="parent-field" role="radiogroup" aria-label="Dierfiguur">
+          <div className="parent-field" role="radiogroup" aria-label={t('children.form.avatar')}>
             <p className="parent-field-label" aria-hidden="true">
-              Dierfiguur
+              {t('children.form.avatar')}
             </p>
             <div className="parent-avatars">
               {AVATAR_IDS.map((id) => (
@@ -299,7 +296,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
                 className={`parent-avatar-option parent-avatar-none${form.avatar === undefined ? ' is-selected' : ''}`}
                 onClick={() => setForm({ ...form, avatar: undefined })}
               >
-                Geen
+                {t('children.form.noAvatar')}
                 {form.avatar === undefined ? (
                   <span className="parent-avatar-check" aria-hidden="true">
                     <IconCheck size={13} />
@@ -321,15 +318,15 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
               <IconSticker size={24} />
             </span>
             <span className="parent-switch-text">
-              <span id={stickersTitleId} className="parent-switch-title">Stickers</span>
+              <span id={stickersTitleId} className="parent-switch-title">{t('children.form.stickersTitle')}</span>
               <span id={stickersHelpId} className="parent-switch-help">
-                Het kind verdient een sticker na elke afgeronde dag. Uit: geen stickerboek na 'Klaar'. Dagen tellen wel door.
+                {t('children.form.stickersHelp')}
               </span>
             </span>
             <span className="parent-switch" aria-hidden="true" />
           </button>
           <fieldset className="parent-sizes">
-            <legend className="parent-field-label">Maten (meerdere mogelijk, gescheiden door komma&apos;s)</legend>
+            <legend className="parent-field-label">{t('children.form.sizesLegend')}</legend>
             {CATEGORIES.map((category) => (
               <div key={category} className="parent-field parent-size-row">
                 <label htmlFor={`${sizesPrefix}-${category}`}>
@@ -338,7 +335,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
                 <input
                   id={`${sizesPrefix}-${category}`}
                   type="text"
-                  placeholder="bijv. 104, 110"
+                  placeholder={t('children.form.sizePlaceholder')}
                   value={form.sizes[category] ?? ''}
                   onChange={(event) => setForm({ ...form, sizes: { ...form.sizes, [category]: event.target.value } })}
                 />
@@ -347,7 +344,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
           </fieldset>
           <div className="parent-stack">
             <button type="submit" disabled={busy}>
-              Opslaan
+              {t('children.form.save')}
             </button>
             <button
               type="button"
@@ -357,14 +354,14 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
                 setError(undefined)
               }}
             >
-              Annuleren
+              {t('children.form.cancel')}
             </button>
           </div>
         </form>
       ) : (
         <button type="button" className="parent-add-button" onClick={startAdd}>
           <IconPlus size={22} />
-          Kind toevoegen
+          {t('children.add')}
         </button>
       )}
     </section>

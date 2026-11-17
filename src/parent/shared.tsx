@@ -1,7 +1,9 @@
 import { useId } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { AppError, translateError } from '../i18n/AppError'
 import { normalizeSize } from '../domain/sizes'
-import { CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
+import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
 import type { Category, Child, ClothingItem, ItemSeason } from '../domain/types'
 import { AnimalAvatar, AVATAR_COLORS } from '../shared/AnimalAvatar'
 import { usePhotoUrl } from '../shared/hooks'
@@ -13,19 +15,32 @@ const ITEM_SEASON_ICONS: Record<ItemSeason, ReactNode> = {
   winter: <IconSnowflake size={20} />,
   all: <IconSparkle size={20} />,
 }
-/** Seizoenskeuze voor een kledingstuk (toevoegen en wijzigen). */
-export const ITEM_SEASON_OPTIONS = ITEM_SEASONS.map((value) => ({
-  value,
-  label: SEASON_LABELS[value],
-  icon: ITEM_SEASON_ICONS[value],
-}))
+/** Season choice for a clothing item (adding and editing); labels are read at call time (render). */
+export function itemSeasonOptions() {
+  return ITEM_SEASONS.map((value) => ({
+    value,
+    label: SEASON_LABELS[value],
+    icon: ITEM_SEASON_ICONS[value],
+  }))
+}
+
+/** Category choice for a clothing item (adding and editing); labels are read at call time (render). */
+export function categoryOptions() {
+  return CATEGORIES.map((value) => ({
+    value,
+    label: CATEGORY_LABELS[value],
+    emoji: CATEGORY_EMOJI[value],
+  }))
+}
 
 export function itemLabel(item: Pick<ClothingItem, 'name' | 'category'>): string {
   const name = item.name?.trim()
   return name ? name : CATEGORY_LABELS[item.category]
 }
 
+/** User-facing text for a caught error: AppError is translated, other errors keep their message. */
 export function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof AppError) return translateError(error)
   return error instanceof Error && error.message ? error.message : fallback
 }
 
@@ -34,7 +49,7 @@ export function Thumb({ photo, className = '' }: { photo: Blob; className?: stri
   return <img className={`parent-thumb ${className}`} src={url} alt="" draggable={false} />
 }
 
-/** Hoe een ChoiceGroup eruitziet: losse chips, grote kaarten (met emoji) of een segmentbalk. */
+/** How a ChoiceGroup looks: loose chips, large cards (with emoji) or a segmented bar. */
 type ChoiceVariant = 'chips' | 'cards' | 'segmented'
 
 interface ChoiceGroupProps<T extends string> {
@@ -45,7 +60,7 @@ interface ChoiceGroupProps<T extends string> {
   variant?: ChoiceVariant
 }
 
-/** Groep keuzeknoppen (radiogroep) voor categorie en seizoen. */
+/** Group of choice buttons (radio group) for category and season. */
 export function ChoiceGroup<T extends string>({ legend, value, options, onChange, variant = 'chips' }: ChoiceGroupProps<T>) {
   return (
     <div className="parent-field" role="radiogroup" aria-label={legend}>
@@ -84,7 +99,7 @@ export function ChoiceGroup<T extends string>({ legend, value, options, onChange
   )
 }
 
-/** Is deze (hex)kleur zo licht dat witte tekst erop slecht leesbaar is? */
+/** Is this (hex) color so light that white text on it is hard to read? */
 function isLight(color: string): boolean {
   const match = /^#([0-9a-f]{6})$/i.exec(color)
   if (!match) return false
@@ -93,7 +108,7 @@ function isLight(color: string): boolean {
   return luma > 170
 }
 
-/** Profielplaatje van een kind: het dierfiguur, of (zonder) een gekleurde cirkel met de beginletter. */
+/** Profile picture of a child: the animal figure, or (without one) a colored circle with the initial. */
 export function ChildAvatar({ child, size = 48 }: { child: Pick<Child, 'name' | 'color' | 'avatar'>; size?: number }) {
   const style = { width: size, height: size, '--child-color': child.color } as CSSProperties
   if (child.avatar) {
@@ -114,7 +129,7 @@ export function ChildAvatar({ child, size = 48 }: { child: Pick<Child, 'name' | 
   )
 }
 
-/** Alle maten die een kind voor deze categorie heeft, zonder dubbelen (hoofdletterongevoelig). */
+/** All sizes a child has for this category, without duplicates (case-insensitive). */
 export function sizeSuggestions(children: Child[], category: Category | undefined): string[] {
   if (!category) return []
   const seen = new Set<string>()
@@ -137,14 +152,15 @@ interface SizeFieldProps {
   onBlur?: () => void
 }
 
-/** Optioneel maatveld met suggesties uit de maten van de kinderen. */
+/** Optional size field with suggestions from the children's sizes. */
 export function SizeField({ value, suggestions, onChange, onBlur }: SizeFieldProps) {
+  const { t } = useTranslation('parent')
   const inputId = useId()
   const listId = useId()
   return (
     <div className="parent-field">
       <label htmlFor={inputId} className="parent-field-label">
-        Maat (mag leeg blijven)
+        {t('shared.sizeLabel')}
       </label>
       <input
         id={inputId}
@@ -152,7 +168,7 @@ export function SizeField({ value, suggestions, onChange, onBlur }: SizeFieldPro
         list={listId}
         value={value}
         maxLength={20}
-        placeholder="bijv. 110"
+        placeholder={t('shared.sizePlaceholder')}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onBlur}
         onKeyDown={(event) => {

@@ -1,7 +1,8 @@
 /**
- * Piepjes, spraak en trilling. Alles is feature-detected en gooit nooit:
- * in jsdom of oude browsers doen de functies gewoon niets.
+ * Beeps, speech and vibration. Everything is feature-detected and never throws:
+ * in jsdom or old browsers the functions simply do nothing.
  */
+import i18next from '../i18n'
 
 export type SoundKind = 'tap' | 'pick' | 'unpick' | 'done' | 'sticker'
 
@@ -16,7 +17,7 @@ export function isFeedbackEnabled(): boolean {
   return enabled
 }
 
-// ---------- geluid (Web Audio) ----------
+// ---------- sound (Web Audio) ----------
 
 const MASTER_GAIN = 0.15
 
@@ -78,7 +79,7 @@ export function playSound(kind: SoundKind): void {
       const peak = MASTER_GAIN * (n.gain ?? 1)
       const start = t0 + n.start
       const end = start + n.dur
-      // Korte attack en release, zodat er geen klikjes hoorbaar zijn.
+      // Short attack and release, so no clicks are audible.
       gain.gain.setValueAtTime(0.0001, start)
       gain.gain.linearRampToValueAtTime(peak, start + Math.min(0.01, n.dur / 3))
       gain.gain.exponentialRampToValueAtTime(0.0001, end)
@@ -88,11 +89,11 @@ export function playSound(kind: SoundKind): void {
       osc.stop(end + 0.02)
     }
   } catch {
-    // geluid is nooit essentieel
+    // sound is never essential
   }
 }
 
-// ---------- spraak ----------
+// ---------- speech ----------
 
 function synth(): SpeechSynthesis | null {
   try {
@@ -108,10 +109,17 @@ export function canSpeak(): boolean {
   return synth() !== null
 }
 
-function pickDutchVoice(s: SpeechSynthesis): SpeechSynthesisVoice | null {
+/** BCP 47 tag for speech synthesis, derived from the active i18n language ('nl' -> 'nl-NL'). */
+function speechLang(): string {
+  const lng = i18next.language || 'nl'
+  return lng === 'nl' ? 'nl-NL' : lng
+}
+
+function pickVoice(s: SpeechSynthesis, lang: string): SpeechSynthesisVoice | null {
   try {
     const voices = s.getVoices?.() ?? []
-    return voices.find((v) => v.lang?.toLowerCase().startsWith('nl')) ?? null
+    const prefix = (lang.split('-')[0] ?? lang).toLowerCase()
+    return voices.find((v) => v.lang?.toLowerCase().startsWith(prefix)) ?? null
   } catch {
     return null
   }
@@ -126,20 +134,21 @@ export function speak(text: string): void {
     if (!s || !text) return
     s.cancel()
     const u = new SpeechSynthesisUtterance(text)
-    u.lang = 'nl-NL'
+    const lang = speechLang()
+    u.lang = lang
     u.rate = 0.95
     u.pitch = 1.1
-    const voice = pickDutchVoice(s)
+    const voice = pickVoice(s, lang)
     if (voice) {
       u.voice = voice
     } else if (!waitingForVoices && typeof s.addEventListener === 'function') {
-      // Stemmen laden soms later: één keer luisteren, dan weten we de volgende keer de goede.
+      // Voices sometimes load later: listen once, then we know the right one next time.
       waitingForVoices = true
       s.addEventListener('voiceschanged', () => (waitingForVoices = false), { once: true })
     }
     s.speak(u)
   } catch {
-    // spraak is nooit essentieel
+    // speech is never essential
   }
 }
 
@@ -147,11 +156,11 @@ export function stopSpeaking(): void {
   try {
     synth()?.cancel()
   } catch {
-    // negeren
+    // ignore
   }
 }
 
-// ---------- trillen ----------
+// ---------- vibration ----------
 
 export function vibrate(ms = 15): void {
   if (!enabled) return
@@ -160,6 +169,6 @@ export function vibrate(ms = 15): void {
       navigator.vibrate(ms)
     }
   } catch {
-    // negeren
+    // ignore
   }
 }

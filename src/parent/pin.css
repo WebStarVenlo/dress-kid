@@ -1,4 +1,4 @@
-/* Ouder-PIN: invoervelden, slot en instellingen. Bouwt voort op de klassen uit parent.css. */
+/* Parent PIN: input fields, lock and settings. Builds on the classes from parent.css. */
 
 .pin-field {
   margin: 0;
@@ -10,7 +10,7 @@
   font-size: 1.7rem;
   font-weight: 800;
   letter-spacing: 0.45em;
-  /* Het laatste teken krijgt ook letter-spacing; opvullen houdt de cijfers optisch gecentreerd. */
+  /* The last character also gets letter-spacing; padding keeps the digits optically centered. */
   padding-left: calc(14px + 0.45em);
   text-align: center;
 }
@@ -41,7 +41,7 @@
   box-shadow: none;
 }
 
-/* PIN-instellingen als kopje met kaart */
+/* PIN settings as a heading with a card */
 .parent #parent-pin-title {
   margin: 24px 0 8px;
 }
@@ -65,8 +65,8 @@
 }
 
 /*
- * Tijdens het laden van de PIN staat de som al klaar (terugval), maar pas na een korte vertraging
- * zichtbaar: zo flitst de som niet in beeld als er een PIN blijkt te zijn.
+ * While the PIN is loading, the sum is already in place (fallback) but only becomes visible after a
+ * short delay: this way the sum does not flash into view if a PIN turns out to exist.
  */
 .pin-gate-loading .parent-gate-card > :not(h1):not(.parent-lock) {
   animation: pin-reveal 0.2s ease 0.4s both;

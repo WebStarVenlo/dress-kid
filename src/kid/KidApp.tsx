@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   chooseItem,
   conflictingCategories,
@@ -23,12 +24,12 @@ import { ItemTile } from './ItemTile'
 import { ChildAvatar } from './KidArt'
 import { KidHeader } from './KidHeader'
 import { KidPage, KidStatus, MascotGuide, ParentsButton, RetryButton } from './KidLayout'
-import { CATEGORY_QUESTIONS, flyPhoto, prefersReducedMotion, resolveSeason, slotCategories } from './kidUtils'
+import { categoryQuestion, flyPhoto, prefersReducedMotion, resolveSeason, slotCategories } from './kidUtils'
 import type { FlightStart } from './kidUtils'
 import { OutfitDock, ProgressBar } from './OutfitDock'
 import './kid.css'
 
-/** Volgorde waarin de gekozen kleding op het feestscherm getoond wordt (van boven naar beneden). */
+/** Order in which the chosen clothes are shown on the celebration screen (top to bottom). */
 const BODY_ORDER: readonly Category[] = [
   'accessory',
   'jacket',
@@ -42,13 +43,13 @@ const BODY_ORDER: readonly Category[] = [
 
 type Screen = 'choose' | 'done'
 
-/** Hoe lang het kind de "ongedaan maken"-knop na Opnieuw beginnen krijgt. */
+/** How long the child gets the "undo" button after Start over. */
 const UNDO_MS = 5000
-/** Hoe vaak we controleren of het inmiddels een nieuwe dag is. */
+/** How often we check whether it has become a new day. */
 const DAY_CHECK_MS = 60_000
-/** Even wachten na een keuze, zodat het kind het vinkje ziet, voordat de volgende soort komt. */
+/** Wait briefly after a choice, so the child sees the check mark, before the next kind appears. */
 const ADVANCE_MS = 650
-/** Sleutel in localStorage waaronder het gekozen kind onthouden wordt. */
+/** localStorage key under which the chosen child is remembered. */
 export const ACTIVE_CHILD_KEY = 'dress-kid-active-child'
 
 function readActiveChild(): string | undefined {
@@ -64,20 +65,21 @@ function writeActiveChild(id: string | undefined): void {
     if (id === undefined) window.localStorage.removeItem(ACTIVE_CHILD_KEY)
     else window.localStorage.setItem(ACTIVE_CHILD_KEY, id)
   } catch {
-    // Opslag niet beschikbaar: dan onthouden we de keuze gewoon niet.
+    // Storage unavailable: then we simply do not remember the choice.
   }
 }
 
-/** Kan en mag er voorgelezen worden? */
+/** Can and may we read aloud? */
 function talkable(settings: Settings | undefined): boolean {
   return settings !== undefined && settings.soundEnabled && canSpeak()
 }
 
 export default function KidApp({ store }: { store?: WardrobeStore }) {
+  const { t } = useTranslation('kid')
   const activeStore = store ?? getStore()
   const { children, loading, error, reload } = useChildren(activeStore)
   const [chosenId, setChosenId] = useState<string | undefined>(readActiveChild)
-  // Instellingen alvast ophalen: voor het seizoen en het geluid op het profielscherm.
+  // Fetch the settings early: for the season and the sound on the profile screen.
   const [settings, setSettings] = useState<Settings | undefined>(undefined)
 
   useEffect(() => {
@@ -101,9 +103,9 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
   if (loading) {
     return (
       <KidPage season={season}>
-        <KidHeader title="Wat trek je vandaag aan?" guide={guide} />
+        <KidHeader title={t('app.title')} guide={guide} />
         <KidStatus role="status">
-          <p>Even wachten…</p>
+          <p>{t('app.loading')}</p>
         </KidStatus>
       </KidPage>
     )
@@ -112,7 +114,7 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
   if (error) {
     return (
       <KidPage season={season}>
-        <KidHeader title="Wat trek je vandaag aan?" guide={guide} />
+        <KidHeader title={t('app.title')} guide={guide} />
         <KidStatus role="alert" art="oops">
           <p>{error}</p>
           <RetryButton onRetry={() => void reload()} />
@@ -124,26 +126,26 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
   if (children.length === 0) {
     return (
       <KidPage season={season}>
-        <KidHeader title="Wat trek je vandaag aan?" guide={guide} />
+        <KidHeader title={t('app.title')} guide={guide} />
         <KidStatus art="empty">
-          <p className="kid-status__lead">Hoi! Er is nog niemand om aan te kleden.</p>
-          <p>Een grote mens moet eerst een kind toevoegen.</p>
+          <p className="kid-status__lead">{t('app.noChildrenLead')}</p>
+          <p>{t('app.noChildrenHint')}</p>
           <ParentsButton />
         </KidStatus>
       </KidPage>
     )
   }
 
-  // Een onthouden id die niet meer bestaat telt niet mee; met één kind is er niets te kiezen.
+  // A remembered id that no longer exists does not count; with one child there is nothing to choose.
   const child = children.length === 1 ? children[0] : children.find((c) => c.id === chosenId)
 
   if (!child) {
     return (
       <KidPage season={season}>
         <KidHeader
-          title="Wie ben jij?"
+          title={t('app.whoAreYou')}
           guide={guide}
-          onSpeak={talkable(settings) ? () => speak('Hoi! Wie ben jij?') : undefined}
+          onSpeak={talkable(settings) ? () => speak(t('app.speakWhoAreYou')) : undefined}
         />
         <ul className="kid-profiles">
           {children.map((c, i) => (
@@ -153,11 +155,11 @@ export default function KidApp({ store }: { store?: WardrobeStore }) {
                 className="kid-profile"
                 style={{ '--kid-color': c.color } as CSSProperties}
                 onClick={() => {
-                  // Zolang de geluidsinstelling van de ouder nog niet geladen is, blijft het stil.
+                  // As long as the parent's sound setting has not loaded yet, stay silent.
                   if (settings !== undefined) {
                     playSound('pick')
                     vibrate()
-                    speak(`Hoi ${c.name}! Wat trek je vandaag aan?`)
+                    speak(t('app.speakGreeting', { name: c.name }))
                   }
                   writeActiveChild(c.id)
                   setChosenId(c.id)
@@ -200,18 +202,19 @@ function KidDay({
   child: Child
   onSwitch: (() => void) | undefined
 }) {
+  const { t } = useTranslation('kid')
   const { items: allItems, settings, loading, error, reload } = useWardrobe(activeStore)
-  // Alleen kleding die dit kind past (op maat); de rest van de regels staat in compat.ts.
+  // Only clothes that fit this child (by size); the other rules live in compat.ts.
   const items = useMemo(() => allItems.filter((item) => itemFitsChild(item, child)), [allItems, child])
   const [outfit, setOutfit] = useState<Outfit>({})
   const [outfitReady, setOutfitReady] = useState(false)
   const [screen, setScreen] = useState<Screen>('choose')
   const [active, setActive] = useState<Category | undefined>(undefined)
-  // De dag (YYYY-MM-DD) waarvoor de outfit geladen is of wordt.
+  // The day (YYYY-MM-DD) for which the outfit is or is being loaded.
   const [day, setDay] = useState(() => todayKey())
-  // De outfit van vóór "Opnieuw beginnen", een paar seconden lang terug te halen.
+  // The outfit from before "Start over", restorable for a few seconds.
   const [undoOutfit, setUndoOutfit] = useState<Outfit | undefined>(undefined)
-  // Stickerboek: aantal afgeronde dagen (undefined = nog niet geteld) en of er net één bij kwam.
+  // Sticker book: number of completed days (undefined = not counted yet) and whether one was just added.
   const [stickers, setStickers] = useState<number | undefined>(undefined)
   const [freshSticker, setFreshSticker] = useState(false)
   const [marking, setMarking] = useState(false)
@@ -220,7 +223,7 @@ function KidDay({
   const flightRef = useRef<(FlightStart & { category: Category }) | undefined>(undefined)
   const dockRef = useRef<HTMLDivElement>(null)
 
-  // Geluid en voorlezen volgen de instelling van de ouder.
+  // Sound and reading aloud follow the parent's setting.
   useEffect(() => {
     if (!loading) setFeedbackEnabled(settings.soundEnabled)
   }, [loading, settings.soundEnabled])
@@ -232,7 +235,7 @@ function KidDay({
 
   useEffect(() => clearAdvance, [clearAdvance])
 
-  // De opgeslagen outfit van `day` ophalen en opruimen; opnieuw als de dag verandert.
+  // Fetch and prune the saved outfit of `day`; again when the day changes.
   useEffect(() => {
     if (loading || error !== undefined || loadedDayRef.current === day) return undefined
     let cancelled = false
@@ -260,7 +263,7 @@ function KidDay({
     }
   }, [loading, error, items, settings, activeStore, child.id, day, clearAdvance])
 
-  // Op het feestscherm het stickerboek tellen (ook als de dag al eerder klaar was).
+  // On the celebration screen, count the sticker book (also if the day was already done earlier).
   const stickersEnabled = stickersOn(child)
   useEffect(() => {
     if (screen !== 'done' || marking || stickers !== undefined || !stickersEnabled) return undefined
@@ -276,7 +279,7 @@ function KidDay({
     }
   }, [screen, marking, stickers, stickersEnabled, activeStore, child.id])
 
-  // Is het inmiddels een nieuwe dag? Zo ja, begin opnieuw met een lege outfit en meld dat terug.
+  // Has it become a new day? If so, start over with an empty outfit and report that back.
   const rollOverIfNeeded = useCallback((): boolean => {
     const now = todayKey()
     if (now === day) return false
@@ -285,7 +288,7 @@ function KidDay({
     return true
   }, [day])
 
-  // Blijft de app overnacht open, dan beginnen we de nieuwe dag met een lege outfit.
+  // If the app stays open overnight, we start the new day with an empty outfit.
   useEffect(() => {
     const check = () => {
       rollOverIfNeeded()
@@ -303,14 +306,14 @@ function KidDay({
     }
   }, [rollOverIfNeeded])
 
-  // De ongedaan-maken-knop verdwijnt na een paar seconden.
+  // The undo button disappears after a few seconds.
   useEffect(() => {
     if (undoOutfit === undefined) return undefined
     const timer = window.setTimeout(() => setUndoOutfit(undefined), UNDO_MS)
     return () => window.clearTimeout(timer)
   }, [undoOutfit])
 
-  // Na een keuze vliegt de foto naar zijn vakje op de paspop (pas nu bestaat dat vakje).
+  // After a choice the photo flies to its slot on the doll (only now does that slot exist).
   useLayoutEffect(() => {
     const flight = flightRef.current
     flightRef.current = undefined
@@ -342,12 +345,12 @@ function KidDay({
   })
 
   function isDimmed(category: Category, o: Outfit): boolean {
-    // Een jurk kiest shirt en broek weg: die tabbladen zijn dan "vol".
+    // A dress crowds out shirt and trousers: those tabs are then "full".
     return category !== 'dress' && conflictingCategories(category).some((c) => o[c] !== undefined)
   }
 
   function nextCategory(from: Category, o: Outfit): Category | undefined {
-    // Alleen soorten die nog meetellen: na shirt of broek bieden we geen jurk meer aan.
+    // Only kinds that still count: after a shirt or trousers we no longer offer a dress.
     const open = slotCategories(categories, o)
     const start = categories.indexOf(from)
     for (let step = 1; step < categories.length; step += 1) {
@@ -366,7 +369,7 @@ function KidDay({
   }
 
   function handleChoose(item: ClothingItem, tile: HTMLElement) {
-    // Een tik na middernacht rolt eerst de dag om, en wordt niet onder de oude dag bewaard.
+    // A tap after midnight first rolls the day over, and is not saved under the old day.
     if (rollOverIfNeeded()) return
     clearAdvance()
     const wasChosen = outfit[item.category] === item.id
@@ -385,12 +388,12 @@ function KidDay({
 
     const target = nextCategory(item.category, next)
     if (target) {
-      speak(CATEGORY_QUESTIONS[target])
-      // Eerst het vinkje laten zien, dan pas door naar de volgende soort.
+      speak(categoryQuestion(target))
+      // First show the check mark, only then move on to the next kind.
       if (prefersReducedMotion()) setActive(target)
       else advanceRef.current = window.setTimeout(() => setActive(target), ADVANCE_MS)
     } else if (isOutfitReady(items, settings, next)) {
-      speak('Goed zo! Tik op klaar.')
+      speak(t('app.speakAllChosen'))
     }
   }
 
@@ -399,14 +402,14 @@ function KidDay({
     clearAdvance()
     playSound('done')
     vibrate(40)
-    speak(`Super, ${child.name}!`)
+    speak(t('app.speakDone', { name: child.name }))
     setScreen('done')
     setFreshSticker(false)
     setStickers(undefined)
     setMarking(true)
     activeStore
       .markOutfitCompleted(child.id, day)
-      // Alleen een echt nieuwe sticker (eerste Klaar van de dag) komt met animatie en geluid.
+      // Only a genuinely new sticker (first Ready of the day) comes with animation and sound.
       .then((isNew) => setFreshSticker(isNew))
       .catch((e: unknown) => console.error(e))
       .finally(() => setMarking(false))
@@ -433,8 +436,8 @@ function KidDay({
     <button
       type="button"
       className="kid-switch"
-      aria-label={`Wie ben jij? Nu: ${child.name}`}
-      title="Ander kind kiezen"
+      aria-label={t('app.switchLabel', { name: child.name })}
+      title={t('app.switchTitle')}
       onClick={onSwitch}
     >
       <ChildAvatar child={child} />
@@ -448,8 +451,8 @@ function KidDay({
       <button
         type="button"
         className="kid-icon-btn"
-        aria-label="Opnieuw beginnen"
-        title="Opnieuw beginnen"
+        aria-label={t('app.restart')}
+        title={t('app.restart')}
         onClick={restart}
       >
         <IconRestart size={26} />
@@ -461,8 +464,8 @@ function KidDay({
       <button
         type="button"
         className="kid-icon-btn kid-icon-btn--undo"
-        aria-label="Ongedaan maken"
-        title="Ongedaan maken"
+        aria-label={t('app.undo')}
+        title={t('app.undo')}
         onClick={undoRestart}
       >
         <svg className="kid-undo-ring" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
@@ -490,9 +493,9 @@ function KidDay({
   if (loading || (!error && !outfitReady)) {
     return (
       <KidPage season={season}>
-        {header('Wat trek je vandaag aan?')}
+        {header(t('app.title'))}
         <KidStatus role="status">
-          <p>Even wachten…</p>
+          <p>{t('app.loading')}</p>
         </KidStatus>
       </KidPage>
     )
@@ -501,7 +504,7 @@ function KidDay({
   if (error) {
     return (
       <KidPage season={season}>
-        {header('Wat trek je vandaag aan?')}
+        {header(t('app.title'))}
         <KidStatus role="alert" art="oops">
           <p>{error}</p>
           <RetryButton onRetry={() => void reload()} />
@@ -513,20 +516,18 @@ function KidDay({
   if (categories.length === 0) {
     return (
       <KidPage season={season}>
-        {header('Wat trek je vandaag aan?')}
+        {header(t('app.title'))}
         <KidStatus art="empty">
           {allItems.length === 0 ? (
             <>
-              <p className="kid-status__lead">De kleerkast is nog leeg.</p>
-              <p>Een grote mens kan er kleren in doen.</p>
+              <p className="kid-status__lead">{t('app.wardrobeEmptyLead')}</p>
+              <p>{t('app.wardrobeEmptyHint')}</p>
             </>
           ) : (
             <>
-              <p className="kid-status__lead">Er zijn nu geen kleren om uit te kiezen.</p>
-              <p>Een grote mens kan kijken naar het seizoen of naar kleren die in de was zijn.</p>
-              {items.length === 0 ? (
-                <p>Er is geen kleding in jouw maat. Vraag een grote mens om je maten na te kijken.</p>
-              ) : null}
+              <p className="kid-status__lead">{t('app.nothingAvailableLead')}</p>
+              <p>{t('app.nothingAvailableHint')}</p>
+              {items.length === 0 ? <p>{t('app.noSizeMatch')}</p> : null}
             </>
           )}
           <ParentsButton />
@@ -538,7 +539,7 @@ function KidDay({
   if (screen === 'done' && complete) {
     return (
       <KidPage season={season} className="kid-app--done">
-        {header('Dit trek ik vandaag aan!', undefined, null)}
+        {header(t('app.doneTitle'), undefined, null)}
         <Celebration
           child={child}
           chosen={chosen}
@@ -560,8 +561,8 @@ function KidDay({
   return (
     <KidPage season={season}>
       {header(
-        'Wat trek je vandaag aan?',
-        current ? CATEGORY_QUESTIONS[current] : undefined,
+        t('app.title'),
+        current ? categoryQuestion(current) : undefined,
         <>
           {undoButton}
           {restartButton}
@@ -590,7 +591,7 @@ function KidDay({
                 <span className="kid-note__emoji" aria-hidden="true">
                   👗
                 </span>
-                Je hebt een jurk gekozen. Kies hier iets om te wisselen.
+                {t('app.dressChosen')}
               </p>
             ) : null}
             {shown.length === 0 ? (
@@ -598,7 +599,7 @@ function KidDay({
                 <span className="kid-note__emoji" aria-hidden="true">
                   🤷
                 </span>
-                Hier past niets bij.
+                {t('app.nothingFits')}
               </p>
             ) : (
               <div className="kid-grid" key={current}>

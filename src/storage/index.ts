@@ -6,7 +6,7 @@ export type { WardrobeStore }
 
 let instance: WardrobeStore | undefined
 
-/** De gedeelde opslag van de app (lui aangemaakt, één instantie). */
+/** The app's shared storage (lazily created, a single instance). */
 export function getStore(): WardrobeStore {
   instance ??= createIndexedDbStore()
   return instance

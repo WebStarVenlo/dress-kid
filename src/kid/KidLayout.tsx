@@ -1,12 +1,13 @@
-/** Bouwstenen voor de schermen van de kindmodus: pagina met achtergrond en vriendelijke meldingen. */
+/** Building blocks for the kid-mode screens: page with background and friendly messages. */
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { IconGear, IconRestart } from '../shared/icons'
 import { SeasonBackdrop } from './Decor'
 import { Hanger, Mascot } from './KidArt'
 import type { KidSeason } from './kidUtils'
 
-/** De pagina zelf, met de seizoensachtergrond erachter. */
+/** The page itself, with the seasonal background behind it. */
 export function KidPage({
   season,
   className = '',
@@ -24,14 +25,14 @@ export function KidPage({
   )
 }
 
-/** Een vriendelijk middenvlak voor laden, fouten en lege kasten. */
+/** A friendly central panel for loading, errors and empty wardrobes. */
 export function KidStatus({
   role,
   art = 'happy',
   children,
 }: {
   role?: 'status' | 'alert'
-  /** happy = stuiterend T-shirtje (laden), oops = verbaasd T-shirtje, empty = leeg hangertje. */
+  /** happy = bouncing T-shirt (loading), oops = surprised T-shirt, empty = empty hanger. */
   art?: 'happy' | 'oops' | 'empty'
   children: ReactNode
 }) {
@@ -46,22 +47,24 @@ export function KidStatus({
 }
 
 export function ParentsButton() {
+  const { t } = useTranslation('kid')
   return (
-    <Link className="button kid-big-btn kid-big-btn--parents" to="/ouder">
-      <IconGear size={28} /> Naar de ouders
+    <Link className="button kid-big-btn kid-big-btn--parents" to="/parent">
+      <IconGear size={28} /> {t('layout.toParents')}
     </Link>
   )
 }
 
 export function RetryButton({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation('kid')
   return (
     <button type="button" className="kid-big-btn" onClick={onRetry}>
-      <IconRestart size={28} /> Opnieuw proberen
+      <IconRestart size={28} /> {t('layout.retry')}
     </button>
   )
 }
 
-/** De gids als er (nog) geen kind gekozen is. */
+/** The guide when no child has been chosen (yet). */
 export function MascotGuide() {
   return (
     <span className="kid-avatar kid-avatar--mascot" aria-hidden="true">

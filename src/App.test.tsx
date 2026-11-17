@@ -12,9 +12,9 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'Wat trek je vandaag aan?' })).toBeInTheDocument()
   })
 
-  it('toont de ouderomgeving op /ouder', () => {
+  it('toont de ouderomgeving op /parent', () => {
     render(
-      <MemoryRouter initialEntries={['/ouder']}>
+      <MemoryRouter initialEntries={['/parent']}>
         <App />
       </MemoryRouter>,
     )

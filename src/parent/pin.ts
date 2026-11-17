@@ -1,21 +1,25 @@
 import type { StoredPin } from '../domain/types'
+import { AppError, translateError } from '../i18n/AppError'
 
 /**
- * Ouder-PIN: we bewaren nooit de PIN zelf, alleen een PBKDF2-SHA-256-afleiding met een willekeurige salt.
- * Met 4 cijfers is dit geen sterke beveiliging (10.000 mogelijkheden), maar het houdt een kind buiten
- * en voorkomt dat de PIN leesbaar in de opslag staat.
+ * Parent PIN: we never store the PIN itself, only a PBKDF2-SHA-256 derivation with a random salt.
+ * With 4 digits this is not strong security (10,000 possibilities), but it keeps a child out
+ * and prevents the PIN from being readable in storage.
  */
 
-/** Standaard aantal PBKDF2-iteraties (OWASP-advies voor SHA-256 is 210.000 of meer). */
+/** Default number of PBKDF2 iterations (OWASP advice for SHA-256 is 210,000 or more). */
 export const PIN_ITERATIONS = 210_000
 const SALT_BYTES = 16
 const KEY_BITS = 256
 
-/** Na zoveel verkeerde pogingen volgt een wachttijd. */
+/** After this many wrong attempts a cooldown follows. */
 export const MAX_PIN_ATTEMPTS = 5
 export const PIN_COOLDOWN_MS = 30_000
 
-export const INVALID_PIN_FORMAT = 'Een pincode bestaat uit precies 4 cijfers.'
+/** Translated message for a PIN that is not exactly 4 digits. */
+export function invalidPinFormatMessage(): string {
+  return translateError(new AppError('pinInvalidFormat'))
+}
 
 export function isValidPinFormat(pin: string): boolean {
   return /^[0-9]{4}$/.test(pin)
@@ -37,19 +41,19 @@ async function derive(pin: string, salt: Uint8Array<ArrayBuffer>, iterations: nu
   return new Uint8Array(bits)
 }
 
-/** Maakt een op te slaan afleiding van de PIN. Gooit bij een PIN die geen 4 cijfers is. */
+/** Creates a derivation of the PIN to store. Throws for a PIN that is not 4 digits. */
 export async function hashPin(
   pin: string,
   salt: Uint8Array<ArrayBuffer> = crypto.getRandomValues(new Uint8Array(SALT_BYTES)),
   iterations: number = PIN_ITERATIONS,
 ): Promise<StoredPin> {
-  if (!isValidPinFormat(pin)) throw new Error(INVALID_PIN_FORMAT)
-  if (!Number.isSafeInteger(iterations) || iterations <= 0) throw new Error('Ongeldig aantal iteraties.')
+  if (!isValidPinFormat(pin)) throw new AppError('pinInvalidFormat')
+  if (!Number.isSafeInteger(iterations) || iterations <= 0) throw new AppError('pinInvalidIterations')
   const hash = await derive(pin, salt, iterations)
   return { salt: toBase64(salt), hash: toBase64(hash), iterations }
 }
 
-/** Vergelijkt zonder vroegtijdig te stoppen, zodat de duur niet verraadt hoeveel bytes overeenkomen. */
+/** Compares without stopping early, so the duration does not reveal how many bytes match. */
 function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   let diff = a.length ^ b.length
   const length = Math.max(a.length, b.length)
@@ -57,7 +61,7 @@ function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0
 }
 
-/** Controleert een ingevoerde PIN tegen de opgeslagen afleiding. Een beschadigde opslag geeft false. */
+/** Checks an entered PIN against the stored derivation. Corrupt storage yields false. */
 export async function verifyPin(pin: string, stored: StoredPin): Promise<boolean> {
   if (!isValidPinFormat(pin)) return false
   let salt: Uint8Array<ArrayBuffer>
@@ -74,21 +78,21 @@ export async function verifyPin(pin: string, stored: StoredPin): Promise<boolean
 }
 
 // ---------------------------------------------------------------------------
-// Pogingen tellen (alleen in het geheugen: overleeft wisselen van scherm, niet herladen)
+// Counting attempts (in memory only: survives switching screens, not a reload)
 
 /*
- * De teller en de wachttijd staan alleen in het geheugen van deze pagina en beginnen opnieuw na het
- * herladen van de pagina. Dat is acceptabel: dit is een kinderslot, geen echte beveiliging.
+ * The counter and the cooldown live only in this page's memory and start over after the page is
+ * reloaded. That is acceptable: this is a child lock, not real security.
  */
 let failedAttempts = 0
 let blockedUntil = 0
 
-/** Resterende wachttijd in milliseconden (0 als er weer geprobeerd mag worden). */
+/** Remaining cooldown in milliseconds (0 when trying again is allowed). */
 export function pinCooldownRemaining(now = Date.now()): number {
   return Math.max(0, blockedUntil - now)
 }
 
-/** Telt een verkeerde poging; geeft de wachttijd terug die daardoor eventueel ingaat. */
+/** Counts a wrong attempt; returns the cooldown that starts as a result, if any. */
 export function registerFailedPinAttempt(now = Date.now()): number {
   failedAttempts += 1
   if (failedAttempts >= MAX_PIN_ATTEMPTS) {

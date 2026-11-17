@@ -1,3 +1,4 @@
+import { translateError } from '../i18n/AppError'
 import { cropPhoto, fitWithin, resizePhoto } from './image'
 
 describe('fitWithin', () => {
@@ -26,7 +27,7 @@ describe('fitWithin', () => {
 
 describe('resizePhoto', () => {
   it('geeft een duidelijke Nederlandse fout als de foto niet te openen is', async () => {
-    // jsdom kan geen afbeeldingen decoderen: <img> geeft onerror.
+    // jsdom cannot decode images: <img> fires onerror.
     const originalCreate = URL.createObjectURL
     const originalRevoke = URL.revokeObjectURL
     URL.createObjectURL = vi.fn(() => 'blob:test')
@@ -37,9 +38,9 @@ describe('resizePhoto', () => {
       return img
     } as unknown as () => HTMLImageElement)
     try {
-      await expect(resizePhoto(new Blob(['geen foto'], { type: 'text/plain' }))).rejects.toThrow(
-        /foto kan niet worden geopend/,
-      )
+      await expect(
+        resizePhoto(new Blob(['geen foto'], { type: 'text/plain' })).then(() => '', translateError),
+      ).resolves.toMatch(/foto kan niet worden geopend/)
       expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test')
     } finally {
       imageSpy.mockRestore()
@@ -100,8 +101,8 @@ describe('cropPhoto', () => {
   it('weigert een leeg kader', async () => {
     const m = mockCanvas(400, 300)
     try {
-      await expect(cropPhoto(new Blob(['x']), { x: 0.5, y: 0.5, w: 0, h: 0.2 })).rejects.toThrow(/bijsnijkader is leeg/)
-      await expect(cropPhoto(new Blob(['x']), { x: 2, y: 0, w: 0.5, h: 0.5 })).rejects.toThrow(/bijsnijkader is leeg/)
+      await expect(cropPhoto(new Blob(['x']), { x: 0.5, y: 0.5, w: 0, h: 0.2 }).then(() => '', translateError)).resolves.toMatch(/bijsnijkader is leeg/)
+      await expect(cropPhoto(new Blob(['x']), { x: 2, y: 0, w: 0.5, h: 0.5 }).then(() => '', translateError)).resolves.toMatch(/bijsnijkader is leeg/)
       expect(m.ctx.drawImage).not.toHaveBeenCalled()
       expect(m.bitmap.close).toHaveBeenCalledTimes(1)
     } finally {

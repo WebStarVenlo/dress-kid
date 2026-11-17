@@ -12,7 +12,7 @@ function emptyStore(): WardrobeStore {
   return createIndexedDbStore(`kid-test-${counter}-${Math.random()}`)
 }
 
-/** Een winkel met één kind (Sam), dat automatisch gekozen wordt. */
+/** A store with one child (Sam), who is chosen automatically. */
 async function newStore(): Promise<WardrobeStore> {
   const store = emptyStore()
   await store.addChild({ name: 'Sam', color: '#3366ff', sizes: {} })
@@ -54,8 +54,8 @@ describe('KidApp', () => {
   it('toont een lege-kast-melding met link naar de ouders', async () => {
     renderKid(await newStore())
     expect(await screen.findByText('De kleerkast is nog leeg.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Naar de ouders' })).toHaveAttribute('href', '/ouder')
-    expect(screen.getByRole('link', { name: 'Voor ouders' })).toHaveAttribute('href', '/ouder')
+    expect(screen.getByRole('link', { name: 'Naar de ouders' })).toHaveAttribute('href', '/parent')
+    expect(screen.getByRole('link', { name: 'Voor ouders' })).toHaveAttribute('href', '/parent')
   })
 
   it('maakt onderscheid tussen een lege kast en niets draagbaars', async () => {
@@ -158,7 +158,7 @@ describe('KidApp', () => {
     await store.setExcluded(top.id, bad.id, true)
     renderKid(store)
     click(await screen.findByRole('button', { name: 'Rood shirt' }))
-    // automatisch doorgeschakeld naar broek of rok
+    // automatically advanced to trousers or skirt
     expect(await screen.findByRole('button', { name: 'Broek' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Rok' })).not.toBeInTheDocument()
   })
@@ -262,12 +262,12 @@ describe('KidApp', () => {
       const shirt = await screen.findByRole('button', { name: 'Rood shirt' })
       return { shirt }
     }
-    // Na een keuze krijgt het tabje er een vinkje bij in zijn naam, dus op een deel van de naam zoeken.
+    // After a choice the tab gets a check mark in its name, so search on part of the name.
     const selected = (name: string) => screen.getByRole('tab', { name: new RegExp(name) }).getAttribute('aria-selected')
 
     it('schuift pas na 650 ms door', async () => {
       const { shirt } = await setup()
-      // Pas nu de timers vervalsen: het laden (IndexedDB) is dan al klaar.
+      // Only now fake the timers: loading (IndexedDB) is already done by then.
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       click(shirt)
       expect(selected('Shirt')).toBe('true')
@@ -426,7 +426,7 @@ describe('KidApp', () => {
       const sam = await screen.findByRole('button', { name: /Sam/ })
       expect(sam.querySelector('svg')).toBeInTheDocument()
       expect(sam).toHaveTextContent(/^Sam$/)
-      // Zonder dier blijft de beginletter.
+      // Without an animal the initial remains.
       const noor = screen.getByRole('button', { name: /Noor/ })
       expect(noor.querySelector('svg')).not.toBeInTheDocument()
       expect(noor.querySelector('[aria-hidden="true"]')?.textContent).toBe('N')
@@ -478,7 +478,7 @@ describe('KidApp', () => {
     it('toont een vriendelijk scherm zonder kinderen', async () => {
       renderKid(emptyStore())
       expect(await screen.findByText('Een grote mens moet eerst een kind toevoegen.')).toBeInTheDocument()
-      expect(screen.getByRole('link', { name: 'Naar de ouders' })).toHaveAttribute('href', '/ouder')
+      expect(screen.getByRole('link', { name: 'Naar de ouders' })).toHaveAttribute('href', '/parent')
     })
 
     it('filtert kleding op maat van het kind', async () => {
@@ -493,7 +493,7 @@ describe('KidApp', () => {
       expect(await screen.findByRole('button', { name: 'Maat 104' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Zonder maat' })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Maat 116' })).not.toBeInTheDocument()
-      // Noor heeft geen maten voor shirts: alles past.
+      // Noor has no sizes for shirts: everything fits.
       click(screen.getByRole('button', { name: 'Wie ben jij? Nu: Sam' }))
       click(screen.getByRole('button', { name: /Noor/ }))
       expect(await screen.findByRole('button', { name: 'Maat 116' })).toBeInTheDocument()
@@ -515,14 +515,14 @@ describe('KidApp', () => {
       })
       click(screen.getByRole('button', { name: 'Wie ben jij? Nu: Sam' }))
       click(screen.getByRole('button', { name: /Noor/ }))
-      // Noor begint leeg.
+      // Noor starts empty.
       expect(await screen.findByRole('list', { name: 'Jouw outfit' })).not.toHaveTextContent('Rood shirt')
       click(screen.getByRole('button', { name: 'Blauw shirt' }))
       await waitFor(async () => {
         expect((await store.getOutfit(noor, todayKey()))?.outfit).toEqual({ top: blue.id })
       })
       expect((await store.getOutfit(sam, todayKey()))?.outfit).toEqual({ top: red.id })
-      // Terug naar Sam: zijn keuze is er nog.
+      // Back to Sam: his choice is still there.
       click(screen.getByRole('button', { name: 'Wie ben jij? Nu: Noor' }))
       click(screen.getByRole('button', { name: /Sam/ }))
       expect(await screen.findByRole('heading', { name: 'Dit trek ik vandaag aan!' })).toBeInTheDocument()
