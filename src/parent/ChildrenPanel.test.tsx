@@ -62,6 +62,7 @@ describe('kinderen beheren', () => {
     fireEvent.change(screen.getByLabelText(/Schoenen/), { target: { value: '28' } })
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
 
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Kind toevoegen' })).not.toBeInTheDocument())
     const row = (await screen.findByText('Mila')).closest('li') as HTMLElement
     expect(within(row).getByText(/Shirt 104, 110/)).toBeInTheDocument()
     expect(within(row).getByText(/Schoenen 28/)).toBeInTheDocument()
@@ -96,6 +97,7 @@ describe('kinderen beheren', () => {
     fireEvent.change(screen.getByLabelText(/Shirt/), { target: { value: '104, 110' } })
     fireEvent.change(screen.getByLabelText(/Broek/), { target: { value: '104; 110' } })
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Kind wijzigen' })).not.toBeInTheDocument())
     await screen.findByText('Samuel')
     const [child] = await store.listChildren()
     expect(child?.name).toBe('Samuel')
@@ -116,6 +118,7 @@ describe('kinderen beheren', () => {
     expect(within(group).getByRole('radio', { name: 'Konijn' })).toHaveAttribute('aria-checked', 'true')
     expect(within(group).getByRole('radio', { name: 'Geen' })).toHaveAttribute('aria-checked', 'false')
     fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Kind toevoegen' })).not.toBeInTheDocument())
     await screen.findByText('Noor')
     const [child] = await store.listChildren()
     expect(child?.avatar).toBe('bunny')

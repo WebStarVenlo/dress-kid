@@ -1,11 +1,24 @@
 import { useId } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { normalizeSize } from '../domain/sizes'
-import { CATEGORY_LABELS } from '../domain/types'
-import type { Category, Child, ClothingItem } from '../domain/types'
+import { CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
+import type { Category, Child, ClothingItem, ItemSeason } from '../domain/types'
 import { AnimalAvatar, AVATAR_COLORS } from '../shared/AnimalAvatar'
 import { usePhotoUrl } from '../shared/hooks'
-import { IconCheck } from '../shared/icons'
+import { IconCheck, IconSnowflake, IconSparkle, IconSun } from '../shared/icons'
+
+const ITEM_SEASONS: ItemSeason[] = ['summer', 'winter', 'all']
+const ITEM_SEASON_ICONS: Record<ItemSeason, ReactNode> = {
+  summer: <IconSun size={20} />,
+  winter: <IconSnowflake size={20} />,
+  all: <IconSparkle size={20} />,
+}
+/** Seizoenskeuze voor een kledingstuk (toevoegen en wijzigen). */
+export const ITEM_SEASON_OPTIONS = ITEM_SEASONS.map((value) => ({
+  value,
+  label: SEASON_LABELS[value],
+  icon: ITEM_SEASON_ICONS[value],
+}))
 
 export function itemLabel(item: Pick<ClothingItem, 'name' | 'category'>): string {
   const name = item.name?.trim()

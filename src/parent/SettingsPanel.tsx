@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { CurrentSeason, Settings } from '../domain/types'
 import { IconSnowflake, IconSparkle, IconSpeaker, IconSun } from '../shared/icons'
@@ -21,11 +21,17 @@ interface Props {
 export default function SettingsPanel({ store, settings, reload }: Props) {
   const [error, setError] = useState<string | undefined>()
   const [saved, setSaved] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const savingRef = useRef(false)
   const soundTitleId = useId()
   const soundHelpId = useId()
 
   /** Bewaart een wijziging; bij settings wordt altijd het hele object vervangen. */
   async function save(changes: Partial<Settings>) {
+    // Tijdens het opslaan geen tweede wijziging: `settings` is dan nog niet herladen.
+    if (savingRef.current) return
+    savingRef.current = true
+    setBusy(true)
     setError(undefined)
     setSaved(false)
     try {
@@ -35,6 +41,9 @@ export default function SettingsPanel({ store, settings, reload }: Props) {
     } catch (e) {
       console.error(e)
       setError(errorMessage(e, 'Opslaan is niet gelukt.'))
+    } finally {
+      savingRef.current = false
+      setBusy(false)
     }
   }
 
@@ -63,6 +72,7 @@ export default function SettingsPanel({ store, settings, reload }: Props) {
           aria-checked={settings.soundEnabled}
           aria-labelledby={soundTitleId}
           aria-describedby={soundHelpId}
+          disabled={busy}
           className={`parent-switch-row${settings.soundEnabled ? ' is-on' : ''}`}
           onClick={() => void save({ soundEnabled: !settings.soundEnabled })}
         >

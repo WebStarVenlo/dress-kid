@@ -1,13 +1,13 @@
 import { useId, useRef, useState } from 'react'
-import type { ChangeEvent, ReactNode } from 'react'
-import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
+import type { ChangeEvent } from 'react'
+import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
 import type { Category, Child, ClothingItem, ItemSeason } from '../domain/types'
 import { resizePhoto } from '../domain/image'
 import { itemFitsChild } from '../domain/sizes'
 import { usePhotoUrl } from '../shared/hooks'
-import { IconArrowLeft, IconCamera, IconSnowflake, IconSparkle, IconSun, IconTrash, IconWash } from '../shared/icons'
+import { IconArrowLeft, IconCamera, IconTrash, IconWash } from '../shared/icons'
 import type { WardrobeStore } from '../storage'
-import { ChildAvatar, ChoiceGroup, SizeField, Thumb, errorMessage, itemLabel, sizeSuggestions } from './shared'
+import { ITEM_SEASON_OPTIONS, ChildAvatar, ChoiceGroup, SizeField, Thumb, errorMessage, itemLabel, sizeSuggestions } from './shared'
 
 interface Props {
   store: WardrobeStore
@@ -23,13 +23,6 @@ const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
   label: CATEGORY_LABELS[value],
   emoji: CATEGORY_EMOJI[value],
 }))
-const SEASONS: ItemSeason[] = ['summer', 'winter', 'all']
-const SEASON_ICONS: Record<ItemSeason, ReactNode> = {
-  summer: <IconSun size={20} />,
-  winter: <IconSnowflake size={20} />,
-  all: <IconSparkle size={20} />,
-}
-const SEASON_OPTIONS = SEASONS.map((value) => ({ value, label: SEASON_LABELS[value], icon: SEASON_ICONS[value] }))
 
 export default function ItemDetail({ store, item, items, children, reload, onBack }: Props) {
   const [error, setError] = useState<string | undefined>()
@@ -190,7 +183,7 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         <ChoiceGroup
           legend="Seizoen"
           value={item.season}
-          options={SEASON_OPTIONS}
+          options={ITEM_SEASON_OPTIONS}
           onChange={(season: ItemSeason) => void update({ season })}
           variant="segmented"
         />

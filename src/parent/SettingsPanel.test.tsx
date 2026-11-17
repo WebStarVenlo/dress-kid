@@ -45,6 +45,21 @@ describe('geluid en voorlezen', () => {
     render(<Panel />)
   }
 
+  it('negeert een tweede tik zolang het opslaan bezig is', async () => {
+    await renderLive({ currentSeason: 'winter', soundEnabled: true })
+    const save = vi.spyOn(store, 'saveSettings')
+    const toggle = screen.getByRole('switch', { name: 'Geluid en voorlezen' })
+    fireEvent.click(toggle)
+    expect(toggle).toBeDisabled()
+    fireEvent.click(toggle)
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toHaveAttribute('aria-checked', 'false'),
+    )
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toBeEnabled())
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+  })
+
   it('zet geluid uit en weer aan en bewaart ook het seizoen', async () => {
     await renderLive({ currentSeason: 'winter', soundEnabled: true })
     const toggle = screen.getByRole('switch', { name: 'Geluid en voorlezen' })

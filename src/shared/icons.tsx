@@ -178,3 +178,12 @@ export const IconSticker = (p: IconProps) => (
     <path d="M9 14c1.5 1.5 3.5 1.5 5 0" />
   </Icon>
 )
+
+/** Slotje voor het ouderslot. */
+export const IconLock = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="4.5" y="10.5" width="15" height="10" rx="3" />
+    <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+    <circle cx="12" cy="15.5" r="1.2" fill="currentColor" />
+  </Icon>
+)

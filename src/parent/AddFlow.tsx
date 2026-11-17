@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
-import type { ChangeEvent, ReactNode } from 'react'
-import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
+import type { ChangeEvent } from 'react'
+import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
 import type { Category, Child, ItemSeason } from '../domain/types'
 import { resizePhoto } from '../domain/image'
-import { IconCamera, IconCheck, IconImage, IconSnowflake, IconSparkle, IconSun } from '../shared/icons'
+import { IconCamera, IconCheck, IconImage } from '../shared/icons'
 import { requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
-import { ChoiceGroup, SizeField, Thumb, errorMessage, sizeSuggestions } from './shared'
+import { ITEM_SEASON_OPTIONS, ChoiceGroup, SizeField, Thumb, errorMessage, sizeSuggestions } from './shared'
 
 interface AddFlowProps {
   store: WardrobeStore
@@ -26,13 +26,6 @@ const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
   label: CATEGORY_LABELS[value],
   emoji: CATEGORY_EMOJI[value],
 }))
-const SEASONS: ItemSeason[] = ['summer', 'winter', 'all']
-const SEASON_ICONS: Record<ItemSeason, ReactNode> = {
-  summer: <IconSun size={20} />,
-  winter: <IconSnowflake size={20} />,
-  all: <IconSparkle size={20} />,
-}
-const SEASON_OPTIONS = SEASONS.map((value) => ({ value, label: SEASON_LABELS[value], icon: SEASON_ICONS[value] }))
 
 export default function AddFlow({ store, children, reload, onDone }: AddFlowProps) {
   const [category, setCategory] = useState<Category | undefined>()
@@ -87,7 +80,7 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
         <ChoiceGroup
           legend="Wanneer draagt je kind het?"
           value={season}
-          options={SEASON_OPTIONS}
+          options={ITEM_SEASON_OPTIONS}
           onChange={setSeason}
           variant="segmented"
         />
