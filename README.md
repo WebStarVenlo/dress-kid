@@ -1,86 +1,108 @@
 # Dress Kid
 
-Dress Kid is een kleine webapp waarmee kinderen (vanaf ongeveer 4 jaar) zelf hun outfit voor de dag kiezen. Ouders vullen een virtuele kleerkast met foto's van de kleding van hun kind. Het kind kiest daarna uit wat er beschikbaar is.
+Dress Kid is a small web app that lets children (from about age 4) pick their own outfit for the day. Parents fill a virtual wardrobe with photos of their child's clothes. The child then chooses from what is available.
 
-## Functies
+> Note: the UI text is currently Dutch. The labels quoted below are given in English for readability; see [Internationalization](#internationalization).
 
-- **Kinderomgeving** (`/#/`): het kind kiest per categorie (shirt, broek of rok, jurk, trui of vest, sokken, schoenen, jas, extraatje) een kledingstuk uit de kast. Een jurk kan niet samen met shirt en broek gekozen worden. De gekozen outfit wordt per dag onthouden; "Opnieuw beginnen" kan met een knop ongedaan gemaakt worden.
-- **Ouderomgeving** (`/#/ouder`): beheer van de kast, achter een eenvoudig ouderslot (een vermenigvuldigsom).
-- **Toevoegen**: kleding toevoegen met de camera of uit de galerij, ook meerdere foto's tegelijk. Van elk kledingstuk wordt een verkleinde foto (JPEG, maximaal 800 px) opgeslagen. Achteraf kun je de foto, naam, soort en seizoen aanpassen of het kledingstuk verwijderen.
-- **Foto's uit een webshop**: zie [Foto's uit een webshop toevoegen](#fotos-uit-een-webshop-toevoegen).
-- **Past niet bij**: je kunt aangeven welke kledingstukken niet samen gedragen worden. Dit geldt in beide richtingen.
-- **Seizoen**: kleding is gemarkeerd als zomer, winter of altijd. Het seizoen dat de ouder instelt, bepaalt wat het kind ziet.
-- **In de was**: een kledingstuk kan tijdelijk op niet-beschikbaar worden gezet, zonder het te verwijderen.
-- **Back-up**: de hele kast (inclusief foto's) kan geëxporteerd en weer geïmporteerd worden als één JSON-bestand. Op apparaten die dat ondersteunen verschijnt het deelmenu (handig op iPhone en iPad), anders wordt het bestand gedownload. Het terugzetten weigert bestanden groter dan 200 MB en foto's groter dan 10 MB.
-- **Offline en installeerbaar**: als PWA werkt de app zonder internet en kan hij op het startscherm van telefoon of tablet worden gezet.
+## Features
 
-## Foto's uit een webshop toevoegen
+- **Kid area** (`/#/`): the child picks one item per category (shirt, trousers or skirt, dress, sweater or cardigan, socks, shoes, coat, extra) from the wardrobe. A dress cannot be combined with a shirt and trousers. The chosen outfit is remembered per day; "Start over" can be undone with a button.
+- **Parent area** (`/#/parent`): manage the wardrobe, behind a simple parent lock (a multiplication sum).
+- **Adding items**: add clothing with the camera or from the gallery, including several photos at once. A resized photo (JPEG, max 800 px) is stored for each item. Afterwards you can change the photo, name, type and season, or delete the item.
+- **Photos from a webshop**: see [Adding photos from a webshop](#adding-photos-from-a-webshop).
+- **Does not go with**: you can mark which items are not worn together. This applies in both directions.
+- **Season**: items are marked as summer, winter or always. The season the parent sets determines what the child sees.
+- **In the wash**: an item can be temporarily marked as unavailable without deleting it.
+- **Backup**: the whole wardrobe (including photos) can be exported and imported again as a single JSON file. On devices that support it, the share sheet appears (handy on iPhone and iPad); otherwise the file is downloaded. Restoring rejects files larger than 200 MB and photos larger than 10 MB.
+- **Offline and installable**: as a PWA the app works without internet and can be added to the home screen of a phone or tablet.
 
-Ook een productfoto uit een webshop kan in de kast. Kies in **Kleding toevoegen** eerst wat het is en gebruik dan het blok "Van webshop":
+## Adding photos from a webshop
 
-- **Plakken**: kopieer de foto in de webshop (rechtsklik of lang drukken → Afbeelding kopiëren) en plak hem met Ctrl+V of de knop "Plak foto" (als de browser dat ondersteunt).
-- **Slepen**: sleep de foto of een afbeeldingslink uit de webshop naar het sleepvlak.
-- **Afbeeldingslink**: plak de link van de afbeelding zelf (Afbeeldingsadres kopiëren) in het veld "Afbeeldingslink plakken" en kies "Ophalen". Lukt dat niet, dan staat de webshop het ophalen meestal niet toe; sla de foto dan op en kies hem uit de galerij.
+You can also add a product photo from a webshop to the wardrobe. In **Add clothing**, first choose what it is, then use the "From webshop" block:
 
-**iPhone en iPad.** Druk in Safari lang op de productfoto → **Kopieer**, en tik in Dress Kid op **Plak foto** (en daarna op "Plakken"). Lukt dat niet, maak dan een schermafbeelding van de webshoppagina, kies hem via **Kies uit galerij** en snijd hem bij.
+- **Paste**: copy the photo in the webshop (right-click or long-press → Copy image) and paste it with Ctrl+V or the "Paste photo" button (if the browser supports it).
+- **Drag**: drag the photo or an image link from the webshop onto the drop area.
+- **Image link**: paste the link to the image itself (Copy image address) into the "Paste image link" field and choose "Fetch". If that fails, the webshop usually does not allow fetching; save the photo and choose it from the gallery instead.
 
-**Bijsnijden.** Voeg je één foto toe (uit elke bron), dan kun je hem eerst bijsnijden: sleep het kader of de hoeken en kies **Bijsnijden**, of **Hele foto** om hem zoals hij is te gebruiken. Bij meerdere foto's tegelijk wordt dit overgeslagen; bijsnijden kan altijd later via **Bijsnijden** bij het kledingstuk in de kast. Het kaartje "Van webshop" toont de stappen voor jouw apparaat; onder "Andere apparaten" staan de andere.
+**iPhone and iPad.** In Safari, long-press the product photo → **Copy**, then tap **Paste photo** in Dress Kid (and then "Paste"). If that fails, take a screenshot of the webshop page, choose it via **Choose from gallery** and crop it.
 
-**Android: Delen → Dress Kid.** Is de app geïnstalleerd (op het beginscherm gezet via Chrome), dan staat Dress Kid in het deelmenu. Druk in de webshop lang op de productfoto (of kies een foto in de galerij) en kies **Delen → Dress Kid**. De app opent de ouderomgeving; na het ouderslot staat het toevoegscherm klaar met de foto (maximaal 10 foto's van elk 10 MB). Kies wat het is, dan wordt de foto toegevoegd. Deel je alleen een pagina (een link zonder foto), dan komt de link in het linkveld te staan; dat werkt alleen als het een link naar de afbeelding zelf is. Op iPhone en iPad bestaat deze deelfunctie niet voor webapps; gebruik daar plakken of de galerij.
+**Cropping.** If you add a single photo (from any source), you can first crop it: drag the frame or the corners and choose **Crop**, or **Whole photo** to use it as it is. With multiple photos at once, this step is skipped; you can always crop later via **Crop** on the item in the wardrobe. The "From webshop" card shows the steps for your device; the other devices are listed under "Other devices".
 
-## Privacy en bewaren van gegevens
+**Android: Share → Dress Kid.** If the app is installed (added to the home screen via Chrome), Dress Kid appears in the share sheet. In the webshop, long-press the product photo (or choose a photo from the gallery) and choose **Share → Dress Kid**. The app opens the parent area; after the parent lock, the add screen is ready with the photo (up to 10 photos of 10 MB each). Choose what it is, and the photo is added. If you only share a page (a link without a photo), the link ends up in the link field; this only works if it is a link to the image itself. On iPhone and iPad this share feature does not exist for web apps; use paste or the gallery there.
 
-- Alle gegevens blijven op het apparaat. De app heeft geen server en stuurt niets naar het internet. Alleen als je zelf een afbeeldingslink plakt (of deelt) en op "Ophalen" drukt, haalt de app die ene afbeelding op bij de site van die link; verder wordt er niets opgehaald of verstuurd. Gedeelde foto's worden alleen op het apparaat tijdelijk klaargezet tot je ze in het toevoegscherm verwerkt. De kast staat in de opslag van de browser (IndexedDB). Elk apparaat heeft dus zijn eigen kast: er is geen synchronisatie. Wil je dezelfde kast op een tweede apparaat, gebruik dan een back-up.
-- De browser mag opgeslagen gegevens van een site opruimen als het apparaat vol raakt, tenzij de site "persistente opslag" heeft. De app vraagt hier bij het openen van de ouderomgeving en na het toevoegen van kleding om, maar de browser beslist. Zet de app daarom op het beginscherm (dat vergroot de kans op bescherming, vooral op iOS) en maak regelmatig een back-up. In het tabblad Back-up zie je of de opslag beschermd is en hoeveel ruimte de kast ongeveer gebruikt.
-- Wis je de browsergegevens van de site, of raak je het apparaat kwijt, dan is de kast weg als er geen back-up is.
-- Het ouderslot is **geen echte beveiliging**. Het houdt alleen een jong kind uit de beheeromgeving; wie kan rekenen of de code leest, komt er gewoon in. Het slot gaat weer dicht zodra je via de link terug naar de kinderomgeving gaat of de ouderpagina verlaat, en na 5 minuten zonder activiteit of met een verborgen pagina. Opnieuw laden binnen die tijd houdt de ouderomgeving open.
+## Privacy and data storage
 
-## Lokaal ontwikkelen
+- All data stays on the device. The app has no server and sends nothing to the internet. Only if you paste an image link (or share one) and press "Fetch" does the app retrieve that single image from the site of that link; nothing else is fetched or sent. Shared photos are only temporarily staged on the device until you process them in the add screen. The wardrobe is kept in the browser's storage (IndexedDB). Each device therefore has its own wardrobe: there is no synchronization. If you want the same wardrobe on a second device, use a backup.
+- The browser may clear a site's stored data when the device runs low on space, unless the site has "persistent storage". The app asks for this when opening the parent area and after adding clothing, but the browser decides. So put the app on the home screen (this increases the chance of protection, especially on iOS) and make regular backups. The Backup tab shows whether storage is protected and roughly how much space the wardrobe uses.
+- If you clear the browser data for the site, or lose the device, the wardrobe is gone unless you have a backup.
+- The parent lock is **not real security**. It only keeps a young child out of the management area; anyone who can do arithmetic or read the code gets in. The lock closes again as soon as you go back to the kid area via the link or leave the parent page, and after 5 minutes without activity or when the page is hidden. Reloading within that time keeps the parent area open.
 
-Vereist: Node.js 22.
+## Local development
+
+Requires: Node.js 22.
 
 ```bash
-npm ci             # installeren
-npm run dev        # ontwikkelserver op http://localhost:5173
-npm run build      # typecheck + productiebuild naar dist/
-npm run preview    # bekijk de productiebuild lokaal
+npm ci             # install
+npm run dev        # development server on http://localhost:5173
+npm run build      # typecheck + production build to dist/
+npm run preview    # view the production build locally
 npm run lint       # ESLint
-npm run typecheck  # TypeScript zonder build
+npm run typecheck  # TypeScript without build
 npm test           # tests (Vitest)
 ```
 
-De camera en het installeren als app werken alleen in een beveiligde context: HTTPS of `localhost`. Testen op een telefoon via een IP-adres op het lokale netwerk werkt dus niet zonder HTTPS. Gebruik dan de Azure-URL (zie hieronder).
+The camera and installing the app as an app only work in a secure context: HTTPS or `localhost`. Testing on a phone via an IP address on the local network therefore does not work without HTTPS. In that case use the Azure URL (see below).
 
-## Projectstructuur
+## Internationalization
+
+The app uses [i18next](https://www.i18next.com/) with [react-i18next](https://react.i18next.com/).
+
+- Locale files live in `src/i18n/locales/<lng>/<namespace>.json`. The namespaces are `common`, `kid`, `parent`, `settings` and `errors`.
+- **Dutch (`nl`) is the only and default language** for now. `src/i18n/index.ts` initializes i18next; `src/i18n/resources.ts` registers the namespaces.
+- In React components: `const { t } = useTranslation('kid')` and then `t('header.title')`. Interpolation uses `{{name}}`, plurals use the `_one` / `_other` suffixes with `count`, and markup goes through `<Trans>`.
+- Outside React, use `import { t } from '../i18n'` with an explicit namespace.
+- Errors thrown by the domain and storage layers are `AppError(code)`, where `code` is a key in `errors.json`. Show them with `translateError(err)` instead of `err.message`.
+- Keys are type-checked, so a key that is missing from the JSON makes `npm run typecheck` fail.
+- Stored data (IndexedDB names, keys, backup field names, enum values such as `top` or `summer`) is never translated.
+
+**To add a language** (for example English):
+
+1. Copy `src/i18n/locales/nl/` to `src/i18n/locales/en/` and translate the values (keep the keys and placeholders such as `{{name}}` unchanged).
+2. Register the new namespaces for `en` in `src/i18n/resources.ts`.
+3. Choose the language in the settings or as the default in `src/i18n/index.ts`.
+
+**Not yet localized.** The PWA manifest (name, description, share target text in `vite.config.ts`) and the `<title>` and `lang` in `index.html` are still Dutch-only. The manifest is generated at build time and is not handled by i18next, so these must be localized per language separately later (for example one manifest per locale).
+
+## Project structure
 
 ```
 src/
-├── domain/   domeintypes en pure logica (compat: wat past bij elkaar, outfit-regels; image: foto's verkleinen)
-├── storage/  opslaglaag (contract WardrobeStore, IndexedDB, back-up export/import, persistente opslag)
-├── kid/      kinderomgeving (route /)
-├── parent/   ouderomgeving (route /ouder): kast, toevoegen, kledingstuk, seizoen, back-up, ouderslot
-├── shared/   gedeelde React-hooks (useWardrobe, usePhotoUrl)
-├── styles/   globale stijlen
-└── test/     testconfiguratie
+├── domain/   domain types and pure logic (compat: what goes together, outfit rules; image: resizing photos)
+├── storage/  storage layer (WardrobeStore contract, IndexedDB, backup export/import, persistent storage)
+├── kid/      kid area (route /)
+├── parent/   parent area (route /parent): wardrobe, adding, item, season, backup, parent lock
+├── shared/   shared React hooks (useWardrobe, usePhotoUrl)
+├── styles/   global styles
+└── test/     test configuration
 ```
 
-De app gebruikt `HashRouter`, dus alle routes staan na een `#`: `/#/` en `/#/ouder`. Daardoor werkt hosting als statische site zonder serverconfiguratie.
+The app uses `HashRouter`, so all routes come after a `#`: `/#/` and `/#/parent`. This means it can be hosted as a static site without server configuration.
 
-## Hosting op Azure Storage
+## Hosting on Azure Storage
 
-De app wordt als statische website gehost op Azure Storage. Het eindpunt is altijd HTTPS, wat nodig is voor de camera en het installeren als PWA.
+The app is hosted as a static website on Azure Storage. The endpoint is always HTTPS, which is required for the camera and installing as a PWA.
 
-Vereisten: de [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), een Azure-abonnement en `az login`.
+Requirements: the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), an Azure subscription and `az login`.
 
-Stel de variabelen eenmalig in:
+Set the variables once:
 
 ```bash
 RG=rg-dress-kid
 LOCATION=westeurope
-ACCOUNT=<unieke-naam>    # 3-24 tekens, alleen kleine letters en cijfers
+ACCOUNT=<unique-name>    # 3-24 characters, lowercase letters and digits only
 ```
 
-### 1. Opslagaccount aanmaken
+### 1. Create the storage account
 
 ```bash
 az group create --name "$RG" --location "$LOCATION"
@@ -94,7 +116,7 @@ az storage account create \
   --min-tls-version TLS1_2
 ```
 
-### 2. Statische website inschakelen
+### 2. Enable the static website
 
 ```bash
 az storage blob service-properties update \
@@ -105,18 +127,18 @@ az storage blob service-properties update \
   --404-document index.html
 ```
 
-Hiermee wordt de container `$web` aangemaakt. Het adres van de site vind je met:
+This creates the container `$web`. You can find the site address with:
 
 ```bash
 az storage account show --name "$ACCOUNT" --resource-group "$RG" \
   --query "primaryEndpoints.web" -o tsv
 ```
 
-De `--404-document index.html` zorgt dat de app ook bij een onbekend pad wordt geladen.
+`--404-document index.html` ensures the app also loads for an unknown path.
 
-### 3. Build uploaden
+### 3. Upload the build
 
-Je eigen account heeft een data-rol nodig om met `--auth-mode login` te uploaden:
+Your own account needs a data role to upload with `--auth-mode login`:
 
 ```bash
 ME=$(az ad signed-in-user show --query id -o tsv)
@@ -124,7 +146,7 @@ SCOPE=$(az storage account show --name "$ACCOUNT" --resource-group "$RG" --query
 az role assignment create --assignee "$ME" --role "Storage Blob Data Contributor" --scope "$SCOPE"
 ```
 
-Bouw en upload daarna (wacht even tot de rol actief is als de upload meteen faalt):
+Then build and upload (wait a moment for the role to become active if the upload fails immediately):
 
 ```bash
 npm ci
@@ -133,7 +155,7 @@ az storage blob upload-batch --account-name "$ACCOUNT" --auth-mode login \
   -d '$web' -s dist --overwrite
 ```
 
-Let op: `index.html`, `sw.js`, `share-target-sw.js`, `registerSW.js` en `manifest.webmanifest` moeten niet gecachet worden, zodat updates van de app direct aankomen. De deploy-workflow uploadt eerst alle andere bestanden en daarna deze vijf (met `no-cache`, `index.html` als laatste). Handmatig kun je ze zo een `no-cache`-header geven:
+Note: `index.html`, `sw.js`, `share-target-sw.js`, `registerSW.js` and `manifest.webmanifest` must not be cached, so app updates arrive immediately. The deploy workflow uploads all other files first and then these five (with `no-cache`, `index.html` last). Manually, you can give them a `no-cache` header like this:
 
 ```bash
 for f in index.html sw.js share-target-sw.js registerSW.js manifest.webmanifest; do
@@ -142,19 +164,19 @@ for f in index.html sw.js share-target-sw.js registerSW.js manifest.webmanifest;
 done
 ```
 
-## Automatisch deployen met GitHub Actions
+## Automatic deployment with GitHub Actions
 
-De workflow `.github/workflows/ci-deploy.yml` doet bij elke pull request en elke push naar `main` de controles (lint, typecheck, tests, build). Bij een push naar `main` wordt daarna gedeployed naar Azure Storage en naar GitHub Pages. De deploys gebruiken OIDC, dus er staat geen wachtwoord of sleutel in GitHub.
+The workflow `.github/workflows/ci-deploy.yml` runs the checks (lint, typecheck, tests, build) on every pull request and every push to `main`. On a push to `main`, it then deploys to Azure Storage and to GitHub Pages. The deploys use OIDC, so no password or key is stored in GitHub.
 
 ### GitHub Pages
 
-De job `pages` publiceert dezelfde build op <https://webstarvenlo.github.io/dress-kid/>. Door de relatieve paden (`base: './'`) en `HashRouter` werkt de app daar zonder aanpassingen, inclusief camera en installeren als app (Pages is altijd HTTPS).
+The `pages` job publishes the same build to <https://webstarvenlo.github.io/dress-kid/>. Thanks to the relative paths (`base: './'`) and `HashRouter`, the app works there without changes, including the camera and installing as an app (Pages is always HTTPS).
 
-Eenmalig instellen: zet in de repository onder **Settings → Pages → Build and deployment** de bron op **GitHub Actions**. Opnieuw deployen zonder nieuwe commit kan via **Actions → CI en deploy → Run workflow** (op `main`).
+One-time setup: in the repository, go to **Settings → Pages → Build and deployment** and set the source to **GitHub Actions**. To deploy again without a new commit, use **Actions → CI and deploy → Run workflow** (on `main`).
 
-### Eenmalige Azure-configuratie
+### One-time Azure configuration
 
-Maak een app-registratie aan met een federated credential voor deze repository:
+Create an app registration with a federated credential for this repository:
 
 ```bash
 GH_REPO=WebStarVenlo/dress-kid
@@ -175,24 +197,24 @@ az role assignment create --assignee "$APP_ID" \
   --role "Storage Blob Data Contributor" --scope "$SCOPE"
 ```
 
-De `subject` moet exact overeenkomen met de workflow: de deploy-job draait op `refs/heads/main` en gebruikt geen GitHub-`environment`.
+The `subject` must match the workflow exactly: the deploy job runs on `refs/heads/main` and does not use a GitHub `environment`.
 
-### Instellingen in GitHub
+### Settings in GitHub
 
-Ga naar **Settings → Secrets and variables → Actions**.
+Go to **Settings → Secrets and variables → Actions**.
 
 Secrets (tab *Secrets*):
 
-| Naam | Waarde |
+| Name | Value |
 | --- | --- |
-| `AZURE_CLIENT_ID` | `$APP_ID` (de appId van de app-registratie) |
+| `AZURE_CLIENT_ID` | `$APP_ID` (the appId of the app registration) |
 | `AZURE_TENANT_ID` | `az account show --query tenantId -o tsv` |
 | `AZURE_SUBSCRIPTION_ID` | `az account show --query id -o tsv` |
 
 Variable (tab *Variables*):
 
-| Naam | Waarde |
+| Name | Value |
 | --- | --- |
-| `AZURE_STORAGE_ACCOUNT` | de naam van het opslagaccount, bijv. `$ACCOUNT` |
+| `AZURE_STORAGE_ACCOUNT` | the name of the storage account, e.g. `$ACCOUNT` |
 
-Zolang de variable `AZURE_STORAGE_ACCOUNT` niet is ingesteld, slaat de workflow de deploy-stap over. De controles draaien dan wel.
+As long as the variable `AZURE_STORAGE_ACCOUNT` is not set, the workflow skips the deploy step. The checks still run.

@@ -1,13 +1,13 @@
 /*
- * Dress Kid: "Delen → Dress Kid" (Web Share Target, Android).
+ * Dress Kid: "Share → Dress Kid" (Web Share Target, Android).
  *
- * De gegenereerde service worker (sw.js) laadt dit script met importScripts. Het vangt de POST naar
- * ./share-target af (zie share_target in het manifest), bewaart de gedeelde foto's in een eigen kleine
- * IndexedDB ('dress-kid-share', store 'pending') en stuurt door naar het ouderscherm. De app haalt de
- * foto's daar op na het ouderslot (src/domain/sharedPhotos.ts, met hetzelfde formaat).
+ * The generated service worker (sw.js) loads this script with importScripts. It catches the POST to
+ * ./share-target (see share_target in the manifest), stores the shared photos in its own small
+ * IndexedDB ('dress-kid-share', store 'pending') and redirects to the parent screen. The app fetches
+ * the photos from there after the parent lock (src/domain/sharedPhotos.ts, with the same format).
  *
- * Bewust gewoon JavaScript zonder bundler of imports. De functies staan ook op
- * self.dressKidShareTarget, zodat ze los te testen zijn.
+ * Deliberately plain JavaScript without a bundler or imports. The functions are also exposed on
+ * self.dressKidShareTarget so they can be tested in isolation.
  */
 ;(function (scope) {
   'use strict'
@@ -15,14 +15,14 @@
   var DB_NAME = 'dress-kid-share'
   var DB_VERSION = 1
   var STORE = 'pending'
-  /** Pad van share_target.action, relatief aan de scope. */
+  /** Path of share_target.action, relative to the scope. */
   var ACTION = 'share-target'
-  /** Waarheen na het delen, relatief aan de scope (HashRouter). */
-  var REDIRECT = './#/ouder?gedeeld=1'
+  /** Where to go after sharing, relative to the scope (HashRouter). */
+  var REDIRECT = './#/parent?shared=1'
   var MAX_FILES = 10
   var MAX_BYTES = 10 * 1024 * 1024
 
-  /** Is dit de POST van het deelmenu? */
+  /** Is this the POST from the share sheet? */
   function isShareTarget(method, url, scopeUrl) {
     if (String(method).toUpperCase() !== 'POST') return false
     var target = new URL(ACTION, scopeUrl)
@@ -34,7 +34,7 @@
     return typeof file.type === 'string' && file.type.toLowerCase().indexOf('image/') === 0
   }
 
-  /** Eerste http(s)-link uit url of tekst (Chrome zet de paginalink vaak in 'text'). */
+  /** First http(s) link in url or text (Chrome often puts the page link in 'text'). */
   function findLink(url, text) {
     var candidates = [url].concat(String(text || '').split(/\s+/))
     for (var i = 0; i < candidates.length; i++) {
@@ -44,15 +44,15 @@
         var parsed = new URL(value)
         if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href
       } catch (error) {
-        // geen link
+        // not a link
       }
     }
     return undefined
   }
 
   /**
-   * Kiest uit het formulier wat bewaard wordt: hooguit MAX_FILES afbeeldingen van hooguit MAX_BYTES.
-   * Alleen zonder foto's wordt een gedeelde link onthouden.
+   * Picks from the form what gets stored: at most MAX_FILES images of at most MAX_BYTES each.
+   * A shared link is only kept when there are no photos.
    */
   function collectShare(formData) {
     var files = []
@@ -90,7 +90,7 @@
     })
   }
 
-  /** Vervangt wat er nog klaarstond door deze deling (bytes als ArrayBuffer, net als de hoofdopslag). */
+  /** Replaces whatever was still waiting with this share (bytes as ArrayBuffer, like the main store). */
   async function savePending(idb, share, now) {
     var sharedAt = now === undefined ? Date.now() : now
     var records = []
@@ -123,13 +123,13 @@
     return records.length
   }
 
-  /** Verwerkt de deling en stuurt altijd door naar het ouderscherm, ook als bewaren mislukt. */
+  /** Handles the share and always redirects to the parent screen, even if saving fails. */
   async function handleShare(request, scopeUrl, idb) {
     try {
       var share = collectShare(await request.formData())
       await savePending(idb, share)
     } catch (error) {
-      console.error('Dress Kid: gedeelde foto bewaren mislukt', error)
+      console.error('Dress Kid: failed to store shared photo', error)
     }
     return Response.redirect(new URL(REDIRECT, scopeUrl).href, 303)
   }
@@ -145,8 +145,8 @@
     handleShare: handleShare,
   }
 
-  // Alleen in de echte service worker. Deze listener staat vóór die van Workbox (importScripts komt
-  // eerst) en Workbox behandelt alleen GET, dus de POST wordt niet door precache of fallback geslikt.
+  // Only in the real service worker. This listener is registered before Workbox's (importScripts runs
+  // first) and Workbox only handles GET, so the POST is not swallowed by precache or the fallback.
   if (scope.registration && typeof scope.addEventListener === 'function') {
     scope.addEventListener('fetch', function (event) {
       var request = event.request
