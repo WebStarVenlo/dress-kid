@@ -7,6 +7,7 @@ import { itemFitsChild } from '../domain/sizes'
 import { usePhotoUrl } from '../shared/hooks'
 import { IconArrowLeft, IconCamera, IconTrash, IconWash } from '../shared/icons'
 import type { WardrobeStore } from '../storage'
+import PhotoImport from './PhotoImport'
 import { ITEM_SEASON_OPTIONS, ChildAvatar, ChoiceGroup, SizeField, Thumb, errorMessage, itemLabel, sizeSuggestions } from './shared'
 
 interface Props {
@@ -64,10 +65,15 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
     await update({ size: trimmed })
   }
 
-  async function replacePhoto(event: ChangeEvent<HTMLInputElement>) {
+  function pickPhoto(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file) return
+    if (file) void replacePhoto([file])
+  }
+
+  async function replacePhoto(files: File[]) {
+    const file = files[0]
+    if (!file || busy) return
     setBusy(true)
     try {
       setError(undefined)
@@ -110,9 +116,11 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         <h2 id="parent-item-title">{itemLabel(item)}</h2>
       </div>
 
-      <div className="parent-detail-photo">
-        {photoUrl ? <img src={photoUrl} alt={`Foto van ${itemLabel(item)}`} /> : null}
-      </div>
+      <PhotoImport compact disabled={busy} onFiles={replacePhoto}>
+        <div className="parent-detail-photo">
+          {photoUrl ? <img src={photoUrl} alt={`Foto van ${itemLabel(item)}`} /> : null}
+        </div>
+      </PhotoImport>
       <input
         ref={photoRef}
         className="parent-file"
@@ -120,7 +128,7 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         accept="image/*"
         aria-label="Nieuwe foto kiezen"
         tabIndex={-1}
-        onChange={(event) => void replacePhoto(event)}
+        onChange={pickPhoto}
       />
       <button type="button" className="secondary parent-other-photo" disabled={busy} onClick={() => photoRef.current?.click()}>
         <IconCamera size={22} />

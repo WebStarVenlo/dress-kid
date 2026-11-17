@@ -4,6 +4,7 @@ import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
 import type { Category, Child, ItemSeason } from '../domain/types'
 import { resizePhoto } from '../domain/image'
 import { IconCamera, IconCheck, IconImage } from '../shared/icons'
+import PhotoImport from './PhotoImport'
 import { requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
 import { ITEM_SEASON_OPTIONS, ChoiceGroup, SizeField, Thumb, errorMessage, sizeSuggestions } from './shared'
@@ -13,6 +14,8 @@ interface AddFlowProps {
   children: Child[]
   reload: () => Promise<void>
   onDone: () => void
+  /** Foto's die direct verwerkt worden (bv. gedeeld vanuit een andere app); wachten op een gekozen categorie. */
+  initialFiles?: File[]
 }
 
 interface Added {
@@ -27,7 +30,7 @@ const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
   emoji: CATEGORY_EMOJI[value],
 }))
 
-export default function AddFlow({ store, children, reload, onDone }: AddFlowProps) {
+export default function AddFlow({ store, children, reload, onDone, initialFiles }: AddFlowProps) {
   const [category, setCategory] = useState<Category | undefined>()
   const [season, setSeason] = useState<ItemSeason>('all')
   const [size, setSize] = useState('')
@@ -36,13 +39,23 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
   const [progress, setProgress] = useState<{ done: number; total: number } | undefined>()
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
+  const [pending, setPending] = useState<File[]>(initialFiles ?? [])
   const busy = progress !== undefined
 
-  async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
+  function handleInput(event: ChangeEvent<HTMLInputElement>) {
     const input = event.target
     const files = Array.from(input.files ?? [])
     input.value = ''
-    if (files.length === 0 || !category) return
+    void processFiles(files)
+  }
+
+  /** Gemeenschappelijke ingang: galerij, camera, plakken, slepen, link en gedeelde bestanden. */
+  async function processFiles(files: File[], chosen: Category | undefined = category) {
+    if (files.length === 0 || busy) return
+    if (!chosen) {
+      setPending((prev) => [...prev, ...files])
+      return
+    }
     setErrors([])
     setProgress({ done: 0, total: files.length })
     const failures: string[] = []
@@ -50,12 +63,12 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
     for (const [index, file] of files.entries()) {
       try {
         const photo = await resizePhoto(file)
-        const item = await store.addItem({ category, season, size: size.trim() || undefined, photo })
+        const item = await store.addItem({ category: chosen, season, size: size.trim() || undefined, photo })
         if (!requestedPersist) {
           requestedPersist = true
           void requestPersistentStorage()
         }
-        setAdded((prev) => [{ id: item.id, category, photo: item.photo }, ...prev])
+        setAdded((prev) => [{ id: item.id, category: chosen, photo: item.photo }, ...prev])
       } catch (error) {
         console.error(error)
         const reason = errorMessage(error, 'Opslaan is niet gelukt.')
@@ -68,6 +81,15 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
     await reload()
   }
 
+  function chooseCategory(next: Category) {
+    setCategory(next)
+    if (pending.length > 0) {
+      const files = pending
+      setPending([])
+      void processFiles(files, next)
+    }
+  }
+
   const ready = category !== undefined && !busy
 
   return (
@@ -76,7 +98,7 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
         <h2 id="parent-add-title">Kleding toevoegen</h2>
       </div>
       <div className="parent-card parent-form">
-        <ChoiceGroup legend="Wat is het?" value={category} options={CATEGORY_OPTIONS} onChange={setCategory} variant="cards" />
+        <ChoiceGroup legend="Wat is het?" value={category} options={CATEGORY_OPTIONS} onChange={chooseCategory} variant="cards" />
         <ChoiceGroup
           legend="Wanneer draagt je kind het?"
           value={season}
@@ -97,7 +119,12 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
           Kies uit galerij
         </button>
       </div>
-      {category === undefined ? <p className="parent-hint">Kies eerst wat het is.</p> : null}
+      {category === undefined ? (
+        <p className="parent-hint">
+          {pending.length > 0 ? `${pending.length} foto's staan klaar. Kies eerst wat het is.` : 'Kies eerst wat het is.'}
+        </p>
+      ) : null}
+      <PhotoImport onFiles={processFiles} disabled={busy} />
       <input
         ref={cameraRef}
         className="parent-file"
@@ -106,7 +133,7 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
         capture="environment"
         aria-label="Foto maken"
         tabIndex={-1}
-        onChange={(event) => void handleFiles(event)}
+        onChange={handleInput}
       />
       <input
         ref={galleryRef}
@@ -116,7 +143,7 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
         multiple
         aria-label="Foto's kiezen uit galerij"
         tabIndex={-1}
-        onChange={(event) => void handleFiles(event)}
+        onChange={handleInput}
       />
 
       {progress ? (

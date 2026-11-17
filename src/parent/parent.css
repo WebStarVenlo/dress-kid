@@ -1316,3 +1316,40 @@ body:has(.parent-shell) {
     transition: none;
   }
 }
+
+/* Foto van webshop: plakken, slepen, link */
+.parent-import {
+  display: grid;
+  gap: 10px;
+}
+
+.parent-import h3 {
+  margin: 0;
+}
+
+.parent-import.is-compact {
+  margin-bottom: 8px;
+}
+
+.parent-dropzone {
+  border: 2px dashed var(--parent-line);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.parent-dropzone.is-dragging {
+  border-color: currentColor;
+  background: #fff8e3;
+}
+
+.parent-import-row {
+  display: flex;
+  gap: 8px;
+}
+
+.parent-import-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
