@@ -97,3 +97,16 @@ describe('CropDialog', () => {
     expect(screen.queryByRole('button', { name: 'Hele foto' })).not.toBeInTheDocument()
   })
 })
+
+describe('CropDialog focusval', () => {
+  it('Tab en Shift+Tab blijven binnen het venster', () => {
+    setup()
+    const first = document.querySelector('.parent-crop-box') as HTMLElement
+    const last = screen.getByRole('button', { name: 'Annuleren' })
+    last.focus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(first).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(last).toHaveFocus()
+  })
+})

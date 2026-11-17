@@ -155,11 +155,18 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
     return () => document.removeEventListener('paste', onPaste)
   }, [])
 
-  // Een net-misgelopen drop mag de app niet vervangen door de afbeelding zelf.
+  // Een net-misgelopen drop mag de app niet vervangen door de afbeelding of pagina zelf.
+  // Aanname: er is maar één PhotoImport tegelijk gemount (de listeners hangen aan document).
   useEffect(() => {
-    const hasFiles = (event: globalThis.DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files')
+    const isEditable = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLInputElement && target.type !== 'file'))
     const block = (event: globalThis.DragEvent) => {
-      if (hasFiles(event)) event.preventDefault()
+      const types = Array.from(event.dataTransfer?.types ?? [])
+      const relevant = types.includes('Files') || types.includes('text/uri-list') || types.includes('text/html')
+      if (relevant && !isEditable(event.target)) event.preventDefault()
     }
     document.addEventListener('dragover', block)
     document.addEventListener('drop', block)

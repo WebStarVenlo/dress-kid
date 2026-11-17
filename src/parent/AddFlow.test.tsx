@@ -220,3 +220,31 @@ describe('AddFlow uitleg per apparaat', () => {
     expect(other).not.toHaveTextContent('Rechtsklik')
   })
 })
+
+describe('AddFlow verlaten met wachtrij', () => {
+  it('vraagt bevestiging en blijft bij Annuleren', () => {
+    const onDone = vi.fn()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<AddFlow store={store} children={[]} reload={async () => undefined} onDone={onDone} initialFiles={[new File(['a'], 'a.png', { type: 'image/png' })]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Klaar' }))
+    expect(confirm).toHaveBeenCalledWith("Er staan nog 1 foto's klaar. Weggooien?")
+    expect(onDone).not.toHaveBeenCalled()
+    confirm.mockReturnValue(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Klaar' }))
+    expect(onDone).toHaveBeenCalledTimes(1)
+    confirm.mockRestore()
+  })
+
+  it('blokkeert drops van links buiten de dropzone, behalve in invoervelden', () => {
+    render(<PhotoImport onFiles={vi.fn()} />)
+    const make = (target: Element) => {
+      const event = createEvent.drop(target)
+      Object.defineProperty(event, 'dataTransfer', { value: { types: ['text/uri-list'] } })
+      fireEvent(target, event)
+      return event.defaultPrevented
+    }
+    expect(make(document.body)).toBe(true)
+    const input = screen.getByLabelText('Afbeeldingslink plakken')
+    expect(make(input)).toBe(false)
+  })
+})

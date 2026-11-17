@@ -33,6 +33,17 @@ const CORNERS: { mode: CropMode; label: string }[] = [
 const KEY_STEP = 0.02
 const pct = (value: number) => `${value * 100}%`
 
+/** Focus terug naar het vorige element; is dat weg of uitgeschakeld, dan naar de hoofdkop of container. */
+function restoreFocus(previous: Element | null) {
+  if (previous instanceof HTMLElement && previous.isConnected && !(previous as HTMLButtonElement).disabled) {
+    previous.focus()
+    return
+  }
+  const fallback = document.querySelector<HTMLElement>('main, h1, h2, [role="main"]') ?? document.body
+  if (fallback !== document.body && !fallback.hasAttribute('tabindex')) fallback.setAttribute('tabindex', '-1')
+  fallback.focus()
+}
+
 /** Bijsnijden met een sleepbaar kader; werkt met muis, vinger en pijltjestoetsen. */
 export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, title = 'Foto bijsnijden' }: Props) {
   // Gedeelde object-URL; wordt ingetrokken zodra niemand hem meer toont.
@@ -40,6 +51,7 @@ export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, titl
   const [rect, setRect] = useState<CropRect>(DEFAULT_CROP)
   const frameRef = useRef<HTMLDivElement>(null)
   const confirmRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const drag = useRef<Drag | undefined>(undefined)
   const titleId = useId()
   const hintId = useId()
@@ -55,12 +67,29 @@ export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, titl
       if (event.key === 'Escape') {
         event.preventDefault()
         cancelRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      // Focusval: Tab en Shift+Tab blijven binnen het venster.
+      const nodes = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [],
+      )
+      if (nodes.length === 0) return
+      const first = nodes[0]!
+      const last = nodes[nodes.length - 1]!
+      const active = document.activeElement
+      if (event.shiftKey && (active === first || !dialogRef.current?.contains(active))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (active === last || !dialogRef.current?.contains(active))) {
+        event.preventDefault()
+        first.focus()
       }
     }
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus()
+      restoreFocus(previous)
     }
   }, [])
 
@@ -102,7 +131,7 @@ export default function CropDialog({ photo, onCrop, onWholePhoto, onCancel, titl
 
   return (
     <div className="parent-crop-backdrop">
-      <div className="parent-crop" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={hintId}>
+      <div className="parent-crop" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={hintId}>
         <h3 id={titleId}>{title}</h3>
         <p id={hintId} className="parent-hint">
           Sleep het kader of de hoeken tot alleen het kledingstuk erin staat.

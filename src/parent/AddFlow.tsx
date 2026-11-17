@@ -113,6 +113,11 @@ export default function AddFlow({ store, children, reload, onDone, initialFiles,
     void processFiles(files, category)
   }
 
+  function leave() {
+    if (pending.length > 0 && !window.confirm(`Er staan nog ${pending.length} foto's klaar. Weggooien?`)) return
+    onDone()
+  }
+
   const ready = category !== undefined && !busy
 
   return (
@@ -231,7 +236,7 @@ export default function AddFlow({ store, children, reload, onDone, initialFiles,
         </div>
       ) : null}
 
-      <button type="button" className="secondary parent-done" onClick={onDone} disabled={busy}>
+      <button type="button" className="secondary parent-done" onClick={leave} disabled={busy}>
         Klaar
       </button>
     </section>
