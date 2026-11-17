@@ -287,7 +287,7 @@ function PinEntry({ stored, onSuccess, onForgot }: PinEntryProps) {
             <p role="alert" className="parent-error">
               {t('gate.tooManyAttempts')}
             </p>
-            <p className="parent-hint">{t('gate.secondsLeft', { seconds: Math.ceil(remaining / 1000) })}</p>
+            <p className="parent-hint">{t('gate.secondsLeft', { count: Math.ceil(remaining / 1000) })}</p>
           </>
         ) : null}
         <button type="submit" disabled={blocked || checking}>

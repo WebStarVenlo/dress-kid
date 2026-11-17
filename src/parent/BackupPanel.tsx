@@ -3,10 +3,10 @@ import type { ChangeEvent } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { todayKey } from '../domain/compat'
 import { t as translate } from '../i18n'
-import { AppError, translateError } from '../i18n/AppError'
 import { IconBackup, IconCheck, IconUndo } from '../shared/icons'
 import { getStorageInfo } from '../storage'
 import type { StorageInfo, WardrobeStore } from '../storage'
+import { errorMessage } from './shared'
 
 interface Props {
   store: WardrobeStore
@@ -60,8 +60,6 @@ async function saveBackupFile(blob: Blob, filename: string): Promise<'shared' | 
 
 export default function BackupPanel({ store, reload }: Props) {
   const { t } = useTranslation('settings')
-  const failure = (e: unknown, fallback: string) =>
-    e instanceof AppError ? translateError(e) : e instanceof Error && e.message ? e.message : fallback
   const [pending, setPending] = useState<File | undefined>()
   const [error, setError] = useState<string | undefined>()
   const [message, setMessage] = useState<string | undefined>()
@@ -89,7 +87,7 @@ export default function BackupPanel({ store, reload }: Props) {
       setMessage(t('backup.created'))
     } catch (e) {
       console.error(e)
-      setError(failure(e, t('backup.createFailed')))
+      setError(errorMessage(e, t('backup.createFailed')))
     }
   }
 
@@ -113,7 +111,7 @@ export default function BackupPanel({ store, reload }: Props) {
     } catch (e) {
       console.error(e)
       setPending(undefined)
-      setError(failure(e, t('backup.restoreFailed')))
+      setError(errorMessage(e, t('backup.restoreFailed')))
     } finally {
       setBusy(false)
     }

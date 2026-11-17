@@ -23,9 +23,21 @@ export class AppError extends Error {
 
 type LooseT = (key: string, options?: Record<string, unknown>) => string
 
-/** Translates any thrown value into a user-facing message. */
+/**
+ * Translates any thrown value into a user-facing message. Params whose key ends in `Code`
+ * (e.g. `detailCode`) are themselves error codes: they are translated first, in insertion
+ * order and with the params resolved so far, and made available without the suffix (`detail`).
+ */
 export function translateError(err: unknown, fallbackCode: ErrorCode = 'unknown'): string {
   const code = err instanceof AppError ? err.code : fallbackCode
-  const params = err instanceof AppError ? err.params : undefined
-  return (i18next.t as unknown as LooseT)(code, { ns: 'errors', ...params })
+  const t = i18next.t as unknown as LooseT
+  const resolved: Record<string, string | number> = {}
+  for (const [key, value] of Object.entries(err instanceof AppError ? (err.params ?? {}) : {})) {
+    if (key.endsWith('Code') && typeof value === 'string') {
+      resolved[key.slice(0, -4)] = t(value, { ns: 'errors', ...resolved })
+    } else {
+      resolved[key] = value
+    }
+  }
+  return t(code, { ns: 'errors', ...resolved })
 }

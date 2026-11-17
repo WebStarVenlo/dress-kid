@@ -2,11 +2,10 @@ import { useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CurrentSeason, Settings } from '../domain/types'
-import { AppError, translateError } from '../i18n/AppError'
 import { IconSnowflake, IconSparkle, IconSpeaker, IconSun } from '../shared/icons'
 import type { WardrobeStore } from '../storage'
 import PinSettings from './PinSettings'
-import { ChoiceGroup } from './shared'
+import { ChoiceGroup, errorMessage } from './shared'
 
 const OPTION_ICONS = {
   summer: <IconSun size={20} />,
@@ -48,7 +47,7 @@ export default function SettingsPanel({ store, settings, reload }: Props) {
       setSaved(true)
     } catch (e) {
       console.error(e)
-      setError(e instanceof AppError ? translateError(e) : e instanceof Error && e.message ? e.message : t('settings.saveFailed'))
+      setError(errorMessage(e, t('settings.saveFailed')))
     } finally {
       savingRef.current = false
       setBusy(false)

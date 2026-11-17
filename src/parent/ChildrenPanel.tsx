@@ -5,11 +5,10 @@ import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, stickersOn } from '../doma
 import { AVATAR_IDS, AVATAR_LABELS } from '../domain/avatars'
 import type { AvatarId } from '../domain/avatars'
 import type { Category, Child, ChildSizes } from '../domain/types'
-import { AppError, translateError } from '../i18n/AppError'
 import { AnimalAvatar, AVATAR_COLORS } from '../shared/AnimalAvatar'
 import { IconCheck, IconPlus, IconSticker, IconTrash } from '../shared/icons'
 import type { WardrobeStore } from '../storage'
-import { ChildAvatar } from './shared'
+import { ChildAvatar, errorMessage } from './shared'
 
 interface Props {
   store: WardrobeStore
@@ -68,8 +67,6 @@ export function summarizeSizes(sizes: ChildSizes): string {
 
 export default function ChildrenPanel({ store, children, reload }: Props) {
   const { t } = useTranslation('settings')
-  const failure = (e: unknown, fallback: string) =>
-    e instanceof AppError ? translateError(e) : e instanceof Error && e.message ? e.message : fallback
   const [form, setForm] = useState<FormState | undefined>()
   const [error, setError] = useState<string | undefined>()
   const [confirmId, setConfirmId] = useState<string | undefined>()
@@ -101,7 +98,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
       setForm(undefined)
     } catch (e) {
       console.error(e)
-      setError(failure(e, t('children.saveFailed')))
+      setError(errorMessage(e, t('children.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -116,7 +113,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
       setConfirmId(undefined)
     } catch (e) {
       console.error(e)
-      setError(failure(e, t('children.deleteFailed')))
+      setError(errorMessage(e, t('children.deleteFailed')))
     } finally {
       setBusy(false)
     }

@@ -25,7 +25,7 @@ import type {
   Settings,
   StoredPin,
 } from '../domain/types'
-import { AppError, translateError } from '../i18n/AppError'
+import { AppError } from '../i18n/AppError'
 import type { ErrorCode } from '../i18n/AppError'
 import type { WardrobeStore } from './api'
 
@@ -368,19 +368,26 @@ interface BackupFile {
   outfits: SavedOutfit[]
 }
 
-/** Translated label of the n-th entry (zero-based `index`) in a backup list. */
-function backupLabel(code: 'backupLabelChild' | 'backupLabelItem' | 'backupLabelOutfit', index: number): string {
-  return translateError(new AppError(code, { n: index + 1 }))
+type BackupLabelCode = 'backupLabelChild' | 'backupLabelItem' | 'backupLabelOutfit'
+/** Language-independent label of an entry in a backup list; resolved when the error is translated. */
+interface BackupLabel {
+  labelCode: BackupLabelCode
+  n: number
 }
 
-/** Backup validation error; the optional detail is a translated `backupDetail*` code. */
-function invalid(detailCode?: ErrorCode, params?: Record<string, string | number>): AppError {
+/** Label of the n-th entry (zero-based `index`) in a backup list. */
+function backupLabel(labelCode: BackupLabelCode, index: number): BackupLabel {
+  return { labelCode, n: index + 1 }
+}
+
+/** Backup validation error; the optional detail is a `backupDetail*` code, translated later. */
+function invalid(detailCode?: ErrorCode, params?: { label: BackupLabel }): AppError {
   if (!detailCode) return new AppError('backupInvalid')
-  return new AppError('backupInvalidDetail', { detail: translateError(new AppError(detailCode, params)) })
+  return new AppError('backupInvalidDetail', { ...params?.label, detailCode })
 }
 
 /** Runs a validation and turns a failure into a backup error with `detail`. */
-function orInvalid<T>(fn: () => T, detailCode: ErrorCode, params?: Record<string, string | number>): T {
+function orInvalid<T>(fn: () => T, detailCode: ErrorCode, params?: { label: BackupLabel }): T {
   try {
     return fn()
   } catch {
@@ -414,7 +421,7 @@ function parseChild(value: unknown, index: number): Child {
 const DATA_URL_RE = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/\s]*={0,2})$/i
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-function parsePhoto(value: unknown, label: string): StoredPhoto {
+function parsePhoto(value: unknown, label: BackupLabel): StoredPhoto {
   if (typeof value !== 'string') throw invalid('backupDetailNoPhoto', { label })
   const match = DATA_URL_RE.exec(value)
   const type = match?.[1]?.toLowerCase()

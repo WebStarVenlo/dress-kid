@@ -11,7 +11,7 @@ import { IconArrowLeft, IconCamera, IconCrop, IconTrash, IconWash } from '../sha
 import CropDialog from './CropDialog'
 import type { WardrobeStore } from '../storage'
 import PhotoImport from './PhotoImport'
-import { ITEM_SEASON_OPTIONS, ChildAvatar, ChoiceGroup, SizeField, Thumb, errorMessage, itemLabel, sizeSuggestions } from './shared'
+import { categoryOptions, itemSeasonOptions, ChildAvatar, ChoiceGroup, SizeField, Thumb, errorMessage, itemLabel, sizeSuggestions } from './shared'
 
 interface Props {
   store: WardrobeStore
@@ -21,12 +21,6 @@ interface Props {
   reload: () => Promise<void>
   onBack: () => void
 }
-
-const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
-  value,
-  label: CATEGORY_LABELS[value],
-  emoji: CATEGORY_EMOJI[value],
-}))
 
 export default function ItemDetail({ store, item, items, children, reload, onBack }: Props) {
   const { t } = useTranslation('parent')
@@ -218,14 +212,14 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         <ChoiceGroup
           legend={t('itemDetail.category')}
           value={item.category}
-          options={CATEGORY_OPTIONS}
+          options={categoryOptions()}
           onChange={(category: Category) => void update({ category })}
           variant="cards"
         />
         <ChoiceGroup
           legend={t('itemDetail.season')}
           value={item.season}
-          options={ITEM_SEASON_OPTIONS}
+          options={itemSeasonOptions()}
           onChange={(season: ItemSeason) => void update({ season })}
           variant="segmented"
         />

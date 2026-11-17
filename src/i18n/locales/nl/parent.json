@@ -36,7 +36,8 @@
       "failed": "De pincode kan hier niet worden gecontroleerd. Gebruik “PIN vergeten?” om verder te gaan."
     },
     "tooManyAttempts": "Te vaak een verkeerde pincode. Wacht even en probeer het dan opnieuw.",
-    "secondsLeft": "Nog {{seconds}} seconden.",
+    "secondsLeft_one": "Nog {{count}} seconde.",
+    "secondsLeft_other": "Nog {{count}} seconden.",
     "unlock": "Ontgrendelen",
     "forgotPin": "PIN vergeten?"
   },

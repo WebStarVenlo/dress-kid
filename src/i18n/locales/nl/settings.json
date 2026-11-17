@@ -67,11 +67,8 @@
   },
   "pin": {
     "title": "Pincode",
-    "invalidFormat": "Een pincode bestaat uit precies 4 cijfers.",
-    "invalidIterations": "Ongeldig aantal iteraties.",
     "mismatch": "De twee nieuwe pincodes zijn niet hetzelfde.",
     "wrongCurrent": "De huidige pincode klopt niet.",
-    "cryptoFailed": "De pincode kan in deze browser niet worden verwerkt.",
     "saveFailed": "Opslaan van de pincode is niet gelukt.",
     "loadFailed": "De pincode-instelling kon niet worden geladen.",
     "loading": "Laden…",

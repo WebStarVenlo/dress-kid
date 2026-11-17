@@ -1,11 +1,11 @@
 import { useEffect, useId, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { t as translate } from '../i18n'
-import { AppError, translateError } from '../i18n/AppError'
+import { AppError } from '../i18n/AppError'
 import type { StoredPin } from '../domain/types'
 import type { WardrobeStore } from '../storage'
 import PinField from './PinField'
+import { errorMessage } from './shared'
 import { hashPin, invalidPinFormatMessage, isValidPinFormat, resetPinAttempts, verifyPin } from './pin'
 import './pin.css'
 
@@ -26,7 +26,7 @@ async function safely<T>(work: () => Promise<T>): Promise<T> {
     return await work()
   } catch (e) {
     console.error(e)
-    throw new Error(translate('settings:pin.cryptoFailed'), { cause: e })
+    throw new AppError('pinCryptoFailed', undefined, { cause: e })
   }
 }
 
@@ -107,7 +107,7 @@ export default function PinSettings({ store }: Props) {
       reset('idle')
       setSuccess(done)
     } catch (e) {
-      setError({ message: e instanceof AppError ? translateError(e) : e instanceof Error && e.message ? e.message : t('pin.saveFailed') })
+      setError({ message: errorMessage(e, t('pin.saveFailed')) })
     } finally {
       setBusy(false)
     }

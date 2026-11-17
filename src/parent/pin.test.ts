@@ -57,8 +57,8 @@ describe('hashPin en verifyPin', () => {
   })
 
   it('weigert een ongeldige PIN', async () => {
-    await expect(hashPin('12345', undefined, FAST)).rejects.toThrow('precies 4 cijfers')
-    await expect(hashPin('1234', undefined, 0)).rejects.toThrow()
+    await expect(hashPin('12345', undefined, FAST)).rejects.toMatchObject({ code: 'pinInvalidFormat' })
+    await expect(hashPin('1234', undefined, 0)).rejects.toMatchObject({ code: 'pinInvalidIterations' })
   })
 
   it('geeft false bij een beschadigde opgeslagen PIN', async () => {

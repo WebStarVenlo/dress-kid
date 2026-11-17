@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AppError, translateError } from '../i18n/AppError'
 import { normalizeSize } from '../domain/sizes'
-import { CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
+import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
 import type { Category, Child, ClothingItem, ItemSeason } from '../domain/types'
 import { AnimalAvatar, AVATAR_COLORS } from '../shared/AnimalAvatar'
 import { usePhotoUrl } from '../shared/hooks'
@@ -15,12 +15,23 @@ const ITEM_SEASON_ICONS: Record<ItemSeason, ReactNode> = {
   winter: <IconSnowflake size={20} />,
   all: <IconSparkle size={20} />,
 }
-/** Season choice for a clothing item (adding and editing). */
-export const ITEM_SEASON_OPTIONS = ITEM_SEASONS.map((value) => ({
-  value,
-  label: SEASON_LABELS[value],
-  icon: ITEM_SEASON_ICONS[value],
-}))
+/** Season choice for a clothing item (adding and editing); labels are read at call time (render). */
+export function itemSeasonOptions() {
+  return ITEM_SEASONS.map((value) => ({
+    value,
+    label: SEASON_LABELS[value],
+    icon: ITEM_SEASON_ICONS[value],
+  }))
+}
+
+/** Category choice for a clothing item (adding and editing); labels are read at call time (render). */
+export function categoryOptions() {
+  return CATEGORIES.map((value) => ({
+    value,
+    label: CATEGORY_LABELS[value],
+    emoji: CATEGORY_EMOJI[value],
+  }))
+}
 
 export function itemLabel(item: Pick<ClothingItem, 'name' | 'category'>): string {
   const name = item.name?.trim()

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
+import { CATEGORY_LABELS } from '../domain/types'
 import type { Category, Child, ItemSeason } from '../domain/types'
 import { cropPhoto, resizePhoto } from '../domain/image'
 import type { CropRect } from '../domain/image'
@@ -10,7 +10,7 @@ import CropDialog from './CropDialog'
 import PhotoImport from './PhotoImport'
 import { requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
-import { ITEM_SEASON_OPTIONS, ChoiceGroup, SizeField, Thumb, errorMessage, sizeSuggestions } from './shared'
+import { categoryOptions, itemSeasonOptions, ChoiceGroup, SizeField, Thumb, errorMessage, sizeSuggestions } from './shared'
 
 interface AddFlowProps {
   store: WardrobeStore
@@ -28,12 +28,6 @@ interface Added {
   category: Category
   photo: Blob
 }
-
-const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
-  value,
-  label: CATEGORY_LABELS[value],
-  emoji: CATEGORY_EMOJI[value],
-}))
 
 export default function AddFlow({ store, children, reload, onDone, initialFiles, initialUrl }: AddFlowProps) {
   const { t } = useTranslation('parent')
@@ -128,11 +122,11 @@ export default function AddFlow({ store, children, reload, onDone, initialFiles,
         <h2 id="parent-add-title">{t('addFlow.title')}</h2>
       </div>
       <div className="parent-card parent-form">
-        <ChoiceGroup legend={t('addFlow.whatIsIt')} value={category} options={CATEGORY_OPTIONS} onChange={setCategory} variant="cards" />
+        <ChoiceGroup legend={t('addFlow.whatIsIt')} value={category} options={categoryOptions()} onChange={setCategory} variant="cards" />
         <ChoiceGroup
           legend={t('addFlow.whenWorn')}
           value={season}
-          options={ITEM_SEASON_OPTIONS}
+          options={itemSeasonOptions()}
           onChange={setSeason}
           variant="segmented"
         />

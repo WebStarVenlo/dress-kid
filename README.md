@@ -69,7 +69,8 @@ The app uses [i18next](https://www.i18next.com/) with [react-i18next](https://re
 
 1. Copy `src/i18n/locales/nl/` to `src/i18n/locales/en/` and translate the values (keep the keys and placeholders such as `{{name}}` unchanged).
 2. Register the new namespaces for `en` in `src/i18n/resources.ts`.
-3. Choose the language in the settings or as the default in `src/i18n/index.ts`.
+3. There is no language picker in the app yet. Set `lng` in `src/i18n/index.ts`, or call `i18next.changeLanguage('en')`. Note that `src/i18n/i18next.d.ts` types the keys from the `nl` resources, so `nl` stays the reference for key names.
+4. `lang` in `index.html` and the PWA manifest must follow the chosen language; see below.
 
 **Not yet localized.** The PWA manifest (name, description, share target text in `vite.config.ts`) and the `<title>` and `lang` in `index.html` are still Dutch-only. The manifest is generated at build time and is not handled by i18next, so these must be localized per language separately later (for example one manifest per locale).
 

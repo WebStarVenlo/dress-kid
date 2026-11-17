@@ -1,5 +1,5 @@
 import type { StoredPin } from '../domain/types'
-import { t } from '../i18n'
+import { AppError, translateError } from '../i18n/AppError'
 
 /**
  * Parent PIN: we never store the PIN itself, only a PBKDF2-SHA-256 derivation with a random salt.
@@ -18,7 +18,7 @@ export const PIN_COOLDOWN_MS = 30_000
 
 /** Translated message for a PIN that is not exactly 4 digits. */
 export function invalidPinFormatMessage(): string {
-  return t('settings:pin.invalidFormat')
+  return translateError(new AppError('pinInvalidFormat'))
 }
 
 export function isValidPinFormat(pin: string): boolean {
@@ -47,8 +47,8 @@ export async function hashPin(
   salt: Uint8Array<ArrayBuffer> = crypto.getRandomValues(new Uint8Array(SALT_BYTES)),
   iterations: number = PIN_ITERATIONS,
 ): Promise<StoredPin> {
-  if (!isValidPinFormat(pin)) throw new Error(invalidPinFormatMessage())
-  if (!Number.isSafeInteger(iterations) || iterations <= 0) throw new Error(t('settings:pin.invalidIterations'))
+  if (!isValidPinFormat(pin)) throw new AppError('pinInvalidFormat')
+  if (!Number.isSafeInteger(iterations) || iterations <= 0) throw new AppError('pinInvalidIterations')
   const hash = await derive(pin, salt, iterations)
   return { salt: toBase64(salt), hash: toBase64(hash), iterations }
 }
