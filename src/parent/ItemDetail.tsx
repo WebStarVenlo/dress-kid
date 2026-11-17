@@ -1,12 +1,13 @@
 import { useId, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
+import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
 import type { Category, Child, ClothingItem, ItemSeason } from '../domain/types'
 import { resizePhoto } from '../domain/image'
 import { itemFitsChild } from '../domain/sizes'
 import { usePhotoUrl } from '../shared/hooks'
+import { IconArrowLeft, IconCamera, IconTrash, IconWash } from '../shared/icons'
 import type { WardrobeStore } from '../storage'
-import { ChoiceGroup, SizeField, Thumb, errorMessage, itemLabel, sizeSuggestions } from './shared'
+import { ITEM_SEASON_OPTIONS, ChildAvatar, ChoiceGroup, SizeField, Thumb, errorMessage, itemLabel, sizeSuggestions } from './shared'
 
 interface Props {
   store: WardrobeStore
@@ -22,8 +23,6 @@ const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
   label: CATEGORY_LABELS[value],
   emoji: CATEGORY_EMOJI[value],
 }))
-const SEASONS: ItemSeason[] = ['summer', 'winter', 'all']
-const SEASON_OPTIONS = SEASONS.map((value) => ({ value, label: SEASON_LABELS[value] }))
 
 export default function ItemDetail({ store, item, items, children, reload, onBack }: Props) {
   const [error, setError] = useState<string | undefined>()
@@ -103,10 +102,13 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
 
   return (
     <section aria-labelledby="parent-item-title">
-      <button type="button" className="secondary parent-back" onClick={onBack}>
-        ← Terug naar de kast
+      <button type="button" className="parent-back" onClick={onBack}>
+        <IconArrowLeft size={18} />
+        Terug naar de kast
       </button>
-      <h2 id="parent-item-title">{itemLabel(item)}</h2>
+      <div className="parent-title-row">
+        <h2 id="parent-item-title">{itemLabel(item)}</h2>
+      </div>
 
       <div className="parent-detail-photo">
         {photoUrl ? <img src={photoUrl} alt={`Foto van ${itemLabel(item)}`} /> : null}
@@ -120,8 +122,9 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         tabIndex={-1}
         onChange={(event) => void replacePhoto(event)}
       />
-      <button type="button" className="secondary" disabled={busy} onClick={() => photoRef.current?.click()}>
-        📷 Andere foto
+      <button type="button" className="secondary parent-other-photo" disabled={busy} onClick={() => photoRef.current?.click()}>
+        <IconCamera size={22} />
+        Andere foto
       </button>
 
       {error ? (
@@ -130,31 +133,38 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         </p>
       ) : null}
 
-      <div className="parent-field">
-        <label htmlFor={nameId} className="parent-field-label">
-          Naam (mag leeg blijven)
-        </label>
-        <input
-          id={nameId}
-          type="text"
-          value={name}
-          maxLength={60}
-          onChange={(event) => setName(event.target.value)}
-          onBlur={() => void saveName()}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur()
-          }}
+      <div className="parent-card parent-form">
+        <div className="parent-field">
+          <label htmlFor={nameId} className="parent-field-label">
+            Naam (mag leeg blijven)
+          </label>
+          <input
+            id={nameId}
+            type="text"
+            value={name}
+            maxLength={60}
+            onChange={(event) => setName(event.target.value)}
+            onBlur={() => void saveName()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+            }}
+          />
+        </div>
+
+        <SizeField
+          value={size}
+          suggestions={sizeSuggestions(children, item.category)}
+          onChange={setSize}
+          onBlur={() => void saveSize()}
         />
       </div>
-
-      <SizeField value={size} suggestions={sizeSuggestions(children, item.category)} onChange={setSize} onBlur={() => void saveSize()} />
       {children.length > 0 ? (
         <section className="parent-card" aria-labelledby="parent-fits-title">
           <h3 id="parent-fits-title">Past bij</h3>
           <ul className="parent-fits">
             {children.map((child) => (
               <li key={child.id}>
-                <span className="parent-child-dot" style={{ background: child.color }} aria-hidden="true" />
+                <ChildAvatar child={child} size={28} />
                 {child.name}: {itemFitsChild(item, child) ? 'ja' : 'nee'}
               </li>
             ))}
@@ -162,18 +172,22 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         </section>
       ) : null}
 
-      <ChoiceGroup
-        legend="Categorie"
-        value={item.category}
-        options={CATEGORY_OPTIONS}
-        onChange={(category: Category) => void update({ category })}
-      />
-      <ChoiceGroup
-        legend="Seizoen"
-        value={item.season}
-        options={SEASON_OPTIONS}
-        onChange={(season: ItemSeason) => void update({ season })}
-      />
+      <div className="parent-card parent-form">
+        <ChoiceGroup
+          legend="Categorie"
+          value={item.category}
+          options={CATEGORY_OPTIONS}
+          onChange={(category: Category) => void update({ category })}
+          variant="cards"
+        />
+        <ChoiceGroup
+          legend="Seizoen"
+          value={item.season}
+          options={ITEM_SEASON_OPTIONS}
+          onChange={(season: ItemSeason) => void update({ season })}
+          variant="segmented"
+        />
+      </div>
 
       <button
         type="button"
@@ -181,8 +195,14 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         aria-pressed={!item.available}
         onClick={() => void update({ available: !item.available })}
       >
-        🧺 In de was
-        <span className="parent-wash-state">{item.available ? 'Nee' : 'Ja, niet beschikbaar'}</span>
+        <span className="parent-wash-icon" aria-hidden="true">
+          <IconWash size={24} />
+        </span>
+        <span className="parent-wash-text">
+          <span className="parent-wash-title">In de was</span>
+          <span className="parent-wash-state">{item.available ? 'Nee' : 'Ja, niet beschikbaar'}</span>
+        </span>
+        <span className="parent-switch" aria-hidden="true" />
       </button>
 
       <section className="parent-card" aria-labelledby="parent-excl-title">
@@ -199,7 +219,7 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
                 <h4>
                   <span aria-hidden="true">{CATEGORY_EMOJI[category]}</span> {CATEGORY_LABELS[category]}
                 </h4>
-                <ul className="parent-grid parent-grid-small">
+                <ul className="parent-grid">
                   {inCategory.map((other) => {
                     const excluded =
                       optimistic[other.id] ?? (item.excludedIds.includes(other.id) || other.excludedIds.includes(item.id))
@@ -243,7 +263,8 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         </div>
       ) : (
         <button type="button" className="danger parent-delete" onClick={() => setConfirmDelete(true)}>
-          🗑️ Verwijderen
+          <IconTrash size={22} />
+          Verwijderen
         </button>
       )}
     </section>

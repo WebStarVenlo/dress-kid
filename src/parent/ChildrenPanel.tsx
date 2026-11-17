@@ -1,9 +1,13 @@
 import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
+import { AVATAR_IDS, AVATAR_LABELS } from '../domain/avatars'
+import type { AvatarId } from '../domain/avatars'
 import type { Category, Child, ChildSizes } from '../domain/types'
+import { AnimalAvatar, AVATAR_COLORS } from '../shared/AnimalAvatar'
+import { IconCheck, IconPlus, IconTrash } from '../shared/icons'
 import type { WardrobeStore } from '../storage'
-import { errorMessage } from './shared'
+import { ChildAvatar, errorMessage } from './shared'
 
 interface Props {
   store: WardrobeStore
@@ -21,6 +25,8 @@ interface FormState {
   id?: string
   name: string
   color: string
+  /** Gekozen dierfiguur; ontbreekt = geen (de UI toont dan de beginletter). */
+  avatar?: AvatarId
   sizes: SizeTexts
 }
 
@@ -73,7 +79,8 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
     setBusy(true)
     setError(undefined)
     try {
-      const input = { name: form.name, color: form.color, sizes: toSizes(form.sizes) }
+      // `avatar: undefined` wist bij wijzigen een eerder gekozen dierfiguur ("Geen").
+      const input = { name: form.name, color: form.color, avatar: form.avatar, sizes: toSizes(form.sizes) }
       if (form.id) await store.updateChild(form.id, input)
       else await store.addChild(input)
       await reload()
@@ -110,15 +117,17 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
   function startEdit(child: Child) {
     setError(undefined)
     setConfirmId(undefined)
-    setForm({ id: child.id, name: child.name, color: child.color, sizes: toTexts(child.sizes) })
+    setForm({ id: child.id, name: child.name, color: child.color, avatar: child.avatar, sizes: toTexts(child.sizes) })
   }
 
   const confirming = children.find((child) => child.id === confirmId)
 
   return (
     <section aria-labelledby="parent-children-title">
-      <h2 id="parent-children-title">Kinderen</h2>
-      <p>Maak voor ieder kind een profiel. Vul per soort kleding de maten in die het kind draagt.</p>
+      <div className="parent-title-row">
+        <h2 id="parent-children-title">Kinderen</h2>
+      </div>
+      <p className="parent-lead">Maak voor ieder kind een profiel. Vul per soort kleding de maten in die het kind draagt.</p>
       <p className="parent-hint">
         Kleding zonder maat, of in een soort waarvoor geen maat is ingevuld, is voor dit kind altijd zichtbaar.
       </p>
@@ -142,7 +151,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
             const summary = summarizeSizes(child.sizes)
             return (
               <li key={child.id} className="parent-card parent-child">
-                <span className="parent-child-dot" style={{ background: child.color }} aria-hidden="true" />
+                <ChildAvatar child={child} size={56} />
                 <div className="parent-child-info">
                   <strong>{child.name}</strong>
                   <span className="parent-hint">{summary || 'Geen maten ingevuld'}</span>
@@ -166,7 +175,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
                       setConfirmId(child.id)
                     }}
                   >
-                    🗑️
+                    <IconTrash size={22} />
                   </button>
                 </div>
               </li>
@@ -243,6 +252,46 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
               ))}
             </div>
           </div>
+          <div className="parent-field" role="radiogroup" aria-label="Dierfiguur">
+            <p className="parent-field-label" aria-hidden="true">
+              Dierfiguur
+            </p>
+            <div className="parent-avatars">
+              {AVATAR_IDS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.avatar === id}
+                  aria-label={AVATAR_LABELS[id]}
+                  className={`parent-avatar-option${form.avatar === id ? ' is-selected' : ''}`}
+                  style={{ background: AVATAR_COLORS[id] }}
+                  onClick={() => setForm({ ...form, avatar: id })}
+                >
+                  <AnimalAvatar id={id} />
+                  {form.avatar === id ? (
+                    <span className="parent-avatar-check" aria-hidden="true">
+                      <IconCheck size={13} />
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={form.avatar === undefined}
+                className={`parent-avatar-option parent-avatar-none${form.avatar === undefined ? ' is-selected' : ''}`}
+                onClick={() => setForm({ ...form, avatar: undefined })}
+              >
+                Geen
+                {form.avatar === undefined ? (
+                  <span className="parent-avatar-check" aria-hidden="true">
+                    <IconCheck size={13} />
+                  </span>
+                ) : null}
+              </button>
+            </div>
+          </div>
           <fieldset className="parent-sizes">
             <legend className="parent-field-label">Maten (meerdere mogelijk, gescheiden door komma&apos;s)</legend>
             {CATEGORIES.map((category) => (
@@ -278,6 +327,7 @@ export default function ChildrenPanel({ store, children, reload }: Props) {
         </form>
       ) : (
         <button type="button" className="parent-add-button" onClick={startAdd}>
+          <IconPlus size={22} />
           Kind toevoegen
         </button>
       )}

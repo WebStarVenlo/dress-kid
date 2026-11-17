@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useChildren, useWardrobe } from '../shared/hooks'
+import { IconArrowRight, IconBackup, IconChildren, IconSettings, IconWardrobe } from '../shared/icons'
 import { getStore, requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
 import AddFlow from './AddFlow'
@@ -103,6 +104,13 @@ export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps
   return <ParentMain store={store ?? getStore()} />
 }
 
+const TABS = [
+  { name: 'wardrobe', label: 'Kast', Icon: IconWardrobe },
+  { name: 'children', label: 'Kinderen', Icon: IconChildren },
+  { name: 'settings', label: 'Instellingen', Icon: IconSettings },
+  { name: 'backup', label: 'Back-up', Icon: IconBackup },
+] as const
+
 function ParentMain({ store }: { store: WardrobeStore }) {
   const { items, settings, loading, error, reload } = useWardrobe(store)
   const { children, loading: childrenLoading, error: childrenError, reload: reloadChildren } = useChildren(store)
@@ -182,22 +190,34 @@ function ParentMain({ store }: { store: WardrobeStore }) {
   }
 
   return (
-    <main className="page parent">
-      <header className="parent-header">
-        <h1>Ouderbeheer</h1>
-        <Link className="parent-link" to="/">
-          Naar de kledingkast van je kind →
-        </Link>
-      </header>
+    <div className="parent-shell">
+      <main className="page parent">
+        <header className="parent-header">
+          <div className="parent-brand">
+            <span className="parent-brand-mark" aria-hidden="true">
+              <IconWardrobe size={26} />
+            </span>
+            <h1>Ouderbeheer</h1>
+          </div>
+          <Link className="parent-link" to="/">
+            Naar de kledingkast van je kind
+            <IconArrowRight size={18} />
+          </Link>
+        </header>
+        {error && !(items.length === 0 && view.name === 'wardrobe') ? (
+          <p role="alert" className="parent-error">
+            {error}
+          </p>
+        ) : null}
+        {childrenError ? (
+          <p role="alert" className="parent-error">
+            {childrenError}
+          </p>
+        ) : null}
+        {content}
+      </main>
       <nav className="parent-nav" aria-label="Ouderbeheer">
-        {(
-          [
-            ['wardrobe', 'Kast'],
-            ['children', 'Kinderen'],
-            ['settings', 'Instellingen'],
-            ['backup', 'Back-up'],
-          ] as const
-        ).map(([name, label]) => (
+        {TABS.map(({ name, label, Icon }) => (
           <button
             key={name}
             type="button"
@@ -205,21 +225,13 @@ function ParentMain({ store }: { store: WardrobeStore }) {
             aria-current={tab === name ? 'page' : undefined}
             onClick={() => setView({ name } as View)}
           >
-            {label}
+            <span className="parent-tab-icon">
+              <Icon size={22} />
+            </span>
+            <span className="parent-tab-label">{label}</span>
           </button>
         ))}
       </nav>
-      {error && !(items.length === 0 && view.name === 'wardrobe') ? (
-        <p role="alert" className="parent-error">
-          {error}
-        </p>
-      ) : null}
-      {childrenError ? (
-        <p role="alert" className="parent-error">
-          {childrenError}
-        </p>
-      ) : null}
-      {content}
-    </main>
+    </div>
   )
 }

@@ -299,6 +299,32 @@ describe('kledingstuk', () => {
   })
 })
 
+describe('tabbalk', () => {
+  it('wisselt tussen kast, kinderen, instellingen en back-up', async () => {
+    renderParent()
+    await unlock()
+    const nav = screen.getByRole('navigation', { name: 'Ouderbeheer' })
+    const tabs = within(nav).getAllByRole('button')
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Kast', 'Kinderen', 'Instellingen', 'Back-up'])
+    expect(within(nav).getByRole('button', { name: 'Kast' })).toHaveAttribute('aria-current', 'page')
+
+    fireEvent.click(within(nav).getByRole('button', { name: 'Kinderen' }))
+    await screen.findByRole('heading', { name: 'Kinderen' })
+    expect(within(nav).getByRole('button', { name: 'Kinderen' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('button', { name: 'Kast' })).not.toHaveAttribute('aria-current')
+    // De zwevende toevoegknop hoort alleen bij de kast.
+    expect(screen.queryByRole('button', { name: 'Kleding toevoegen' })).not.toBeInTheDocument()
+
+    fireEvent.click(within(nav).getByRole('button', { name: 'Instellingen' }))
+    await screen.findByRole('switch', { name: 'Geluid en voorlezen' })
+    fireEvent.click(within(nav).getByRole('button', { name: 'Back-up' }))
+    await screen.findByRole('button', { name: 'Back-up maken' })
+    fireEvent.click(within(nav).getByRole('button', { name: 'Kast' }))
+    expect(await screen.findByRole('button', { name: 'Kleding toevoegen' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Kleding toevoegen' })).toHaveLength(1)
+  })
+})
+
 describe('instellingen en back-up', () => {
   it('slaat het seizoen op', async () => {
     renderParent()

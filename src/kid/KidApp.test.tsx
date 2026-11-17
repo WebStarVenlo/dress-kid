@@ -44,6 +44,7 @@ beforeAll(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   window.localStorage.clear()
 })
 
@@ -252,6 +253,138 @@ describe('KidApp', () => {
     expect(screen.queryByRole('button', { name: 'Ongedaan maken' })).not.toBeInTheDocument()
   })
 
+  describe('doorschuiven naar de volgende soort', () => {
+    async function setup() {
+      const store = await newStore()
+      await add(store, 'top', 'Rood shirt')
+      await add(store, 'bottom', 'Blauwe broek')
+      renderKid(store)
+      const shirt = await screen.findByRole('button', { name: 'Rood shirt' })
+      return { shirt }
+    }
+    // Na een keuze krijgt het tabje er een vinkje bij in zijn naam, dus op een deel van de naam zoeken.
+    const selected = (name: string) => screen.getByRole('tab', { name: new RegExp(name) }).getAttribute('aria-selected')
+
+    it('schuift pas na 650 ms door', async () => {
+      const { shirt } = await setup()
+      // Pas nu de timers vervalsen: het laden (IndexedDB) is dan al klaar.
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      click(shirt)
+      expect(selected('Shirt')).toBe('true')
+      act(() => {
+        vi.advanceTimersByTime(649)
+      })
+      expect(selected('Shirt')).toBe('true')
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(selected('Broek of rok')).toBe('true')
+      expect(selected('Shirt')).toBe('false')
+    })
+
+    it('schuift meteen door bij verminderde beweging', async () => {
+      const { shirt } = await setup()
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+      click(shirt)
+      expect(selected('Broek of rok')).toBe('true')
+    })
+
+    it('een tik op een tab tijdens het wachten annuleert het doorschuiven', async () => {
+      const { shirt } = await setup()
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      click(shirt)
+      click(screen.getByRole('tab', { name: /Shirt/ }))
+      act(() => {
+        vi.advanceTimersByTime(2000)
+      })
+      expect(selected('Shirt')).toBe('true')
+      expect(selected('Broek of rok')).toBe('false')
+    })
+  })
+
+  describe('stickerboek', () => {
+    it('Klaar rondt de dag af en toont het aantal stickers', async () => {
+      const store = await newStore()
+      const sam = await childId(store, 'Sam')
+      await add(store, 'top', 'Gele trui')
+      await add(store, 'bottom', 'Broek')
+      renderKid(store)
+      click(await screen.findByRole('button', { name: 'Gele trui' }))
+      click(await screen.findByRole('button', { name: 'Broek' }))
+      click(screen.getByRole('button', { name: /Klaar/ }))
+      expect(await screen.findByText('Je hebt 1 sticker!')).toBeInTheDocument()
+      expect((await store.getOutfit(sam, todayKey()))?.completedAt).toEqual(expect.any(Number))
+      expect(await store.countCompletedDays(sam)).toBe(1)
+    })
+
+    it('telt eerdere dagen mee (meervoud)', async () => {
+      const store = await newStore()
+      const sam = await childId(store, 'Sam')
+      await store.markOutfitCompleted(sam, '2026-01-02')
+      await add(store, 'top', 'Gele trui')
+      renderKid(store)
+      click(await screen.findByRole('button', { name: 'Gele trui' }))
+      click(screen.getByRole('button', { name: /Klaar/ }))
+      expect(await screen.findByText('Je hebt 2 stickers!')).toBeInTheDocument()
+    })
+
+    it('toont het aantal ook bij het heropenen van een afgeronde dag', async () => {
+      const store = await newStore()
+      await add(store, 'top', 'Gele trui')
+      const first = renderKid(store)
+      click(await screen.findByRole('button', { name: 'Gele trui' }))
+      click(screen.getByRole('button', { name: /Klaar/ }))
+      expect(await screen.findByText('Je hebt 1 sticker!')).toBeInTheDocument()
+      first.unmount()
+      renderKid(store)
+      expect(await screen.findByRole('heading', { name: 'Dit trek ik vandaag aan!' })).toBeInTheDocument()
+      expect(await screen.findByText('Je hebt 1 sticker!')).toBeInTheDocument()
+    })
+
+    it('toont geen stickerboek als er nog niets verdiend is', async () => {
+      const store = await newStore()
+      const sam = await childId(store, 'Sam')
+      const top = await add(store, 'top', 'Gele trui')
+      await store.saveOutfit(sam, todayKey(), { top: top.id })
+      const countSpy = vi.spyOn(store, 'countCompletedDays')
+      renderKid(store)
+      expect(await screen.findByRole('heading', { name: 'Dit trek ik vandaag aan!' })).toBeInTheDocument()
+      await waitFor(() => expect(countSpy).toHaveBeenCalled())
+      expect(screen.queryByText(/Je hebt/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('seizoen', () => {
+    async function seasonOf(season: 'summer' | 'winter' | 'all') {
+      const store = await newStore()
+      await store.saveSettings({ currentSeason: season, soundEnabled: true })
+      await add(store, 'top', 'Gele trui')
+      const { container } = renderKid(store)
+      await screen.findByRole('button', { name: 'Gele trui' })
+      return container.querySelector('main')
+    }
+
+    it('volgt het ingestelde seizoen', async () => {
+      expect(await seasonOf('winter')).toHaveClass('kid-app--winter')
+      cleanup()
+      expect(await seasonOf('summer')).toHaveClass('kid-app--summer')
+    })
+
+    it('kiest bij "altijd" op basis van de maand', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date(2026, 6, 15))
+      expect(await seasonOf('all')).toHaveClass('kid-app--summer')
+      cleanup()
+      vi.setSystemTime(new Date(2026, 0, 15))
+      expect(await seasonOf('all')).toHaveClass('kid-app--winter')
+    })
+  })
+
   describe('kinderen', () => {
     async function twoChildren() {
       const store = emptyStore()
@@ -259,6 +392,23 @@ describe('KidApp', () => {
       await store.addChild({ name: 'Noor', color: '#ff6699', sizes: {} })
       return store
     }
+
+    it('toont het dier van een kind op de profielkeuze en in de kop', async () => {
+      const store = emptyStore()
+      await store.addChild({ name: 'Sam', color: '#3366ff', avatar: 'dino', sizes: {} })
+      await store.addChild({ name: 'Noor', color: '#ff6699', sizes: {} })
+      renderKid(store)
+      const sam = await screen.findByRole('button', { name: /Sam/ })
+      expect(sam.querySelector('svg')).toBeInTheDocument()
+      expect(sam).toHaveTextContent(/^Sam$/)
+      // Zonder dier blijft de beginletter.
+      const noor = screen.getByRole('button', { name: /Noor/ })
+      expect(noor.querySelector('svg')).not.toBeInTheDocument()
+      expect(noor.querySelector('[aria-hidden="true"]')?.textContent).toBe('N')
+      click(sam)
+      const switcher = await screen.findByRole('button', { name: 'Wie ben jij? Nu: Sam' })
+      expect(switcher.querySelector('svg')).toBeInTheDocument()
+    })
 
     it('toont een profielkeuze bij meerdere kinderen', async () => {
       renderKid(await twoChildren())

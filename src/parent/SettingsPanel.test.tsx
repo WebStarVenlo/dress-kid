@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, beforeEach, vi } from 'vitest'
+import type { Settings } from '../domain/types'
 import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 import SettingsPanel from './SettingsPanel'
@@ -29,6 +31,55 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+describe('geluid en voorlezen', () => {
+  /** Rendert het paneel met een levende `settings`-prop, zoals ParentApp dat doet. */
+  async function renderLive(initial: Settings) {
+    await store.saveSettings(initial)
+    const loaded = await store.getSettings()
+    function Panel() {
+      const [settings, setSettings] = useState(loaded)
+      return <SettingsPanel store={store} settings={settings} reload={async () => setSettings(await store.getSettings())} />
+    }
+    render(<Panel />)
+  }
+
+  it('negeert een tweede tik zolang het opslaan bezig is', async () => {
+    await renderLive({ currentSeason: 'winter', soundEnabled: true })
+    const save = vi.spyOn(store, 'saveSettings')
+    const toggle = screen.getByRole('switch', { name: 'Geluid en voorlezen' })
+    fireEvent.click(toggle)
+    expect(toggle).toBeDisabled()
+    fireEvent.click(toggle)
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toHaveAttribute('aria-checked', 'false'),
+    )
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toBeEnabled())
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+  })
+
+  it('zet geluid uit en weer aan en bewaart ook het seizoen', async () => {
+    await renderLive({ currentSeason: 'winter', soundEnabled: true })
+    const toggle = screen.getByRole('switch', { name: 'Geluid en voorlezen' })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('Geluidjes en voorlezen van de vragen in de kindmodus.')).toBeInTheDocument()
+    fireEvent.click(toggle)
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toHaveAttribute('aria-checked', 'false'),
+    )
+    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+    fireEvent.click(screen.getByRole('switch', { name: 'Geluid en voorlezen' }))
+    await waitFor(async () => expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true }))
+  })
+
+  it('behoudt de geluidsinstelling bij het kiezen van een seizoen', async () => {
+    await renderLive({ currentSeason: 'all', soundEnabled: false })
+    expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(screen.getByRole('radio', { name: 'Zomer' }))
+    await waitFor(async () => expect(await store.getSettings()).toEqual({ currentSeason: 'summer', soundEnabled: false }))
+  })
 })
 
 describe('pincode instellen', () => {

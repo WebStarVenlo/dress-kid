@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from '../domain/types'
-import type { ClothingItem, NewChild, NewClothingItem, StoredPin } from '../domain/types'
+import type { AvatarId } from '../domain/avatars'
+import type { ClothingItem, NewChild, NewClothingItem, Settings, StoredPin } from '../domain/types'
 import type { WardrobeStore } from './api'
 import { createIndexedDbStore } from './indexedDbStore'
 import { createIndexedDbStore as reexported, getStore } from './index'
@@ -391,8 +392,8 @@ describe('createIndexedDbStore: instellingen en outfits', () => {
   it('geeft standaardinstellingen als er niets is opgeslagen', async () => {
     const store = freshStore()
     expect(await store.getSettings()).toEqual(DEFAULT_SETTINGS)
-    await store.saveSettings({ currentSeason: 'winter' })
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter' })
+    await store.saveSettings({ currentSeason: 'winter', soundEnabled: true })
+    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
   })
 
   it('slaat outfits per kind en datum op en overschrijft ze', async () => {
@@ -485,7 +486,7 @@ describe('createIndexedDbStore: back-up', () => {
     const b = await source.addItem(newItem({ category: 'bottom', season: 'winter', size: '116' }))
     await source.updateItem(b.id, { available: false })
     await source.setExcluded(a.id, b.id, true)
-    await source.saveSettings({ currentSeason: 'winter' })
+    await source.saveSettings({ currentSeason: 'winter', soundEnabled: false })
     const k1 = await source.addChild(newChild({ sizes: { top: ['110', '116'], bottom: ['116'] } }))
     const k2 = await source.addChild(newChild({ name: 'Sam', color: '#0af' }))
     await source.saveOutfit(k1.id, '2026-02-02', { top: a.id, bottom: b.id })
@@ -504,7 +505,7 @@ describe('createIndexedDbStore: back-up', () => {
     expect(items[1]?.size).toBe('116')
     expect(items[0]?.photo.type).toBe('image/webp')
     expect(await bytesOf(items[0]!.photo)).toEqual(bigPhoto)
-    expect(await target.getSettings()).toEqual({ currentSeason: 'winter' })
+    expect(await target.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
     expect(await target.listChildren()).toEqual(await source.listChildren())
     expect(await target.getOutfit(k1.id, '2026-02-02')).toEqual({
       childId: k1.id,
@@ -567,7 +568,7 @@ describe('createIndexedDbStore: back-up', () => {
     expect((await store.getItem('b'))?.excludedIds).toEqual(['a'])
     expect(await store.getItem('b')).not.toHaveProperty('name')
     expect(await store.getOutfit('k1', '2026-01-01')).toEqual({ childId: 'k1', date: '2026-01-01', outfit: { top: 'a' } })
-    expect(await store.getSettings()).toEqual({ currentSeason: 'summer' })
+    expect(await store.getSettings()).toEqual({ currentSeason: 'summer', soundEnabled: true })
     expect(await bytesOf((await store.getItem('a'))!.photo)).toEqual([1, 2, 3])
   })
 
@@ -695,7 +696,7 @@ describe('createIndexedDbStore: back-up', () => {
     const store = freshStore()
     const existing = await store.addItem(newItem({ name: 'Blijft' }))
     const kid = await store.addChild(newChild({ name: 'Blijft' }))
-    await store.saveSettings({ currentSeason: 'winter' })
+    await store.saveSettings({ currentSeason: 'winter', soundEnabled: false })
     await store.saveOutfit(kid.id, '2026-05-05', { top: existing.id })
 
     await expect(store.importBackup(file)).rejects.toThrow(/geen geldig Dress Kid back-upbestand/)
@@ -703,7 +704,7 @@ describe('createIndexedDbStore: back-up', () => {
     const items = await store.listItems()
     expect(items.map((i) => i.name)).toEqual(['Blijft'])
     expect(await bytesOf(items[0]!.photo)).toEqual([1, 2, 3, 250])
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter' })
+    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
     expect(await store.listChildren()).toEqual([kid])
     expect(await store.getOutfit(kid.id, '2026-05-05')).toEqual({
       childId: kid.id,
@@ -862,5 +863,279 @@ describe('createIndexedDbStore: import-grenzen', () => {
     const item = { ...(validBackup().items as object[])[0]!, photo: ok }
     await store.importBackup(jsonBlob(validBackup({ items: [item] })))
     expect((await store.listItems())[0]!.photo.size).toBe(Math.floor((9 * 1024 * 1024) / 3) * 3)
+  })
+})
+
+describe('createIndexedDbStore: avatar van een kind', () => {
+  it('addChild slaat een geldige avatar op en laat hem weg als er geen is', async () => {
+    const store = freshStore()
+    const a = await store.addChild(newChild({ avatar: 'fox' }))
+    const b = await store.addChild(newChild({ name: 'Sam' }))
+    expect(a.avatar).toBe('fox')
+    expect(b).not.toHaveProperty('avatar')
+    expect(await store.listChildren()).toEqual([a, b])
+  })
+
+  it('addChild negeert een onbekende avatar', async () => {
+    const store = freshStore()
+    const a = await store.addChild(newChild({ avatar: 'draak' as AvatarId }))
+    const b = await store.addChild(newChild({ avatar: 5 as unknown as AvatarId }))
+    expect(a).not.toHaveProperty('avatar')
+    expect(b).not.toHaveProperty('avatar')
+    expect((await store.listChildren()).every((child) => !('avatar' in child))).toBe(true)
+  })
+
+  it('updateChild zet, behoudt en wist de avatar', async () => {
+    const store = freshStore()
+    const a = await store.addChild(newChild())
+    expect((await store.updateChild(a.id, { avatar: 'owl' })).avatar).toBe('owl')
+    // Andere wijzigingen laten de avatar staan.
+    expect((await store.updateChild(a.id, { name: 'Noortje' })).avatar).toBe('owl')
+    expect((await store.updateChild(a.id, { avatar: 'dino' })).avatar).toBe('dino')
+    // Een onbekende waarde wordt genegeerd: de bestaande avatar blijft.
+    expect((await store.updateChild(a.id, { avatar: 'draak' as AvatarId })).avatar).toBe('dino')
+    // `avatar: undefined` (of null) wist hem.
+    const cleared = await store.updateChild(a.id, { avatar: undefined })
+    expect(cleared).not.toHaveProperty('avatar')
+    expect(cleared.name).toBe('Noortje')
+    await store.updateChild(a.id, { avatar: 'cat' })
+    expect(await store.updateChild(a.id, { avatar: null as unknown as AvatarId })).not.toHaveProperty('avatar')
+    expect(await store.listChildren()).toEqual([{ ...a, name: 'Noortje' }])
+  })
+
+  it('round-trip: de avatar gaat mee in de back-up, alleen als hij gezet is', async () => {
+    const source = freshStore()
+    const k1 = await source.addChild(newChild({ avatar: 'unicorn' }))
+    const k2 = await source.addChild(newChild({ name: 'Sam' }))
+    const json = await backupJson(source)
+    expect(json.children).toEqual([
+      { id: k1.id, name: 'Noor', color: '#ff8800', avatar: 'unicorn', sizes: {}, createdAt: k1.createdAt },
+      { id: k2.id, name: 'Sam', color: '#ff8800', sizes: {}, createdAt: k2.createdAt },
+    ])
+    const target = freshStore()
+    await target.importBackup(await source.exportBackup())
+    expect(await target.listChildren()).toEqual([k1, k2])
+  })
+
+  it('import laat een onbekende of ongeldige avatar stil vallen', async () => {
+    const store = freshStore()
+    await store.importBackup(
+      jsonBlob(
+        validBackup({
+          children: [
+            { id: 'k1', name: 'Noor', color: '#ff8800', sizes: {}, createdAt: 1, avatar: 'draak' },
+            { id: 'k2', name: 'Sam', color: '#ff8800', sizes: {}, createdAt: 2, avatar: 42 },
+            { id: 'k3', name: 'Lot', color: '#ff8800', sizes: {}, createdAt: 3, avatar: 'bear' },
+          ],
+        }),
+      ),
+    )
+    const children = await store.listChildren()
+    expect(children.map((child) => child.id)).toEqual(['k1', 'k2', 'k3'])
+    expect(children[0]).not.toHaveProperty('avatar')
+    expect(children[1]).not.toHaveProperty('avatar')
+    expect(children[2]?.avatar).toBe('bear')
+  })
+})
+
+describe('createIndexedDbStore: geluid en voorlezen', () => {
+  it('staat standaard aan en kan uit', async () => {
+    const store = freshStore()
+    expect((await store.getSettings()).soundEnabled).toBe(true)
+    await store.saveSettings({ currentSeason: 'summer', soundEnabled: false })
+    expect(await store.getSettings()).toEqual({ currentSeason: 'summer', soundEnabled: false })
+    await store.saveSettings({ currentSeason: 'summer', soundEnabled: true })
+    expect((await store.getSettings()).soundEnabled).toBe(true)
+  })
+
+  it('saveSettings maakt van een ongeldige waarde de standaard en gooit nog steeds bij een onbekend seizoen', async () => {
+    const store = freshStore()
+    await store.saveSettings({ currentSeason: 'winter', soundEnabled: 'nee' as unknown as boolean })
+    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
+    await store.saveSettings({ currentSeason: 'winter', soundEnabled: false })
+    await expect(store.saveSettings({ currentSeason: 'lente', soundEnabled: true } as unknown as Settings)).rejects.toThrow(
+      'Onbekend seizoen.',
+    )
+    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+  })
+
+  it('oude opgeslagen instellingen zonder soundEnabled krijgen true', async () => {
+    const name = `dress-kid-settings-${Math.random().toString(36).slice(2)}`
+    const store = createIndexedDbStore(name)
+    expect(await store.listItems()).toEqual([])
+    const { openDB } = await import('idb')
+    const raw = await openDB(name, 2)
+    await raw.put('settings', { currentSeason: 'winter' }, 'settings')
+    raw.close()
+    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
+  })
+
+  it('round-trip via de back-up, en een ongeldige waarde bij import wordt true', async () => {
+    const source = freshStore()
+    await source.saveSettings({ currentSeason: 'all', soundEnabled: false })
+    expect((await backupJson(source)).settings).toEqual({ currentSeason: 'all', soundEnabled: false })
+    const target = freshStore()
+    await target.importBackup(await source.exportBackup())
+    expect(await target.getSettings()).toEqual({ currentSeason: 'all', soundEnabled: false })
+
+    await target.importBackup(jsonBlob(validBackup({ settings: { currentSeason: 'winter', soundEnabled: 'uit' } })))
+    expect(await target.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
+  })
+})
+
+describe('createIndexedDbStore: stickerboek', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('markOutfitCompleted zet completedAt en is idempotent', async () => {
+    const store = freshStore()
+    const k = await store.addChild(newChild())
+    await store.saveOutfit(k.id, '2026-04-01', { top: 'x' })
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    expect(await store.markOutfitCompleted(k.id, '2026-04-01')).toBe(true)
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    expect(await store.markOutfitCompleted(k.id, '2026-04-01')).toBe(false)
+    expect(await store.getOutfit(k.id, '2026-04-01')).toEqual({
+      childId: k.id,
+      date: '2026-04-01',
+      outfit: { top: 'x' },
+      completedAt: 1_000,
+    })
+    expect(await store.countCompletedDays(k.id)).toBe(1)
+  })
+
+  it('markOutfitCompleted maakt een lege outfit aan als er nog niets is', async () => {
+    const store = freshStore()
+    const k = await store.addChild(newChild())
+    vi.spyOn(Date, 'now').mockReturnValue(5_000)
+    await store.markOutfitCompleted(k.id, '2026-04-02')
+    expect(await store.getOutfit(k.id, '2026-04-02')).toEqual({
+      childId: k.id,
+      date: '2026-04-02',
+      outfit: {},
+      completedAt: 5_000,
+    })
+  })
+
+  it('markOutfitCompleted weigert een onbekend kind', async () => {
+    const store = freshStore()
+    await expect(store.markOutfitCompleted('weg', '2026-04-02')).rejects.toThrow('Dit kind bestaat niet (meer).')
+    expect(await store.getOutfit('weg', '2026-04-02')).toBeUndefined()
+  })
+
+  it('saveOutfit behoudt een verdiende sticker; een niet-afgeronde dag heeft geen completedAt', async () => {
+    const store = freshStore()
+    const k = await store.addChild(newChild())
+    await store.saveOutfit(k.id, '2026-04-03', { top: 'x' })
+    expect(await store.getOutfit(k.id, '2026-04-03')).not.toHaveProperty('completedAt')
+    vi.spyOn(Date, 'now').mockReturnValue(7_000)
+    await store.markOutfitCompleted(k.id, '2026-04-03')
+    await store.saveOutfit(k.id, '2026-04-03', { dress: 'y' })
+    expect(await store.getOutfit(k.id, '2026-04-03')).toEqual({
+      childId: k.id,
+      date: '2026-04-03',
+      outfit: { dress: 'y' },
+      completedAt: 7_000,
+    })
+    // Een andere dag krijgt de sticker niet.
+    await store.saveOutfit(k.id, '2026-04-04', { top: 'x' })
+    expect(await store.getOutfit(k.id, '2026-04-04')).not.toHaveProperty('completedAt')
+  })
+
+  it('countCompletedDays telt alleen afgeronde dagen van dat kind', async () => {
+    const store = freshStore()
+    const a = await store.addChild(newChild())
+    const b = await store.addChild(newChild({ name: 'Sam' }))
+    expect(await store.countCompletedDays(a.id)).toBe(0)
+    await store.markOutfitCompleted(a.id, '2026-04-01')
+    await store.markOutfitCompleted(a.id, '2026-04-02')
+    await store.saveOutfit(a.id, '2026-04-03', { top: 'x' })
+    await store.markOutfitCompleted(b.id, '2026-04-01')
+    expect(await store.countCompletedDays(a.id)).toBe(2)
+    expect(await store.countCompletedDays(b.id)).toBe(1)
+    expect(await store.countCompletedDays('onbekend')).toBe(0)
+    // Kind weg: stickers ook weg.
+    await store.deleteChild(a.id)
+    expect(await store.countCompletedDays(a.id)).toBe(0)
+    expect(await store.countCompletedDays(b.id)).toBe(1)
+  })
+
+  it('round-trip: completedAt gaat mee in de back-up, alleen als hij gezet is', async () => {
+    const source = freshStore()
+    const k = await source.addChild(newChild())
+    vi.spyOn(Date, 'now').mockReturnValue(9_000)
+    await source.markOutfitCompleted(k.id, '2026-04-01')
+    await source.saveOutfit(k.id, '2026-04-02', {})
+    const json = await backupJson(source)
+    expect(json.outfits).toEqual(
+      expect.arrayContaining([
+        { childId: k.id, date: '2026-04-01', outfit: {}, completedAt: 9_000 },
+        { childId: k.id, date: '2026-04-02', outfit: {} },
+      ]),
+    )
+    const target = freshStore()
+    await target.importBackup(await source.exportBackup())
+    expect((await target.getOutfit(k.id, '2026-04-01'))?.completedAt).toBe(9_000)
+    expect(await target.getOutfit(k.id, '2026-04-02')).not.toHaveProperty('completedAt')
+    expect(await target.countCompletedDays(k.id)).toBe(1)
+  })
+
+  it.each<[string, unknown]>([
+    ['tekst', '2026-04-01'],
+    ['nul', 0],
+    ['negatief', -5],
+    ['NaN (als null in JSON)', Number.NaN],
+    ['oneindig (als null in JSON)', Number.POSITIVE_INFINITY],
+    ['boolean', true],
+  ])('import laat een ongeldige completedAt (%s) stil vallen', async (_label, completedAt) => {
+    const store = freshStore()
+    await store.importBackup(
+      jsonBlob(
+        validBackup({
+          outfits: [
+            { childId: 'k1', date: '2026-01-01', outfit: { top: 'a' }, completedAt },
+            { childId: 'k1', date: '2026-01-02', outfit: {}, completedAt: 1_700_000_000_000 },
+          ],
+        }),
+      ),
+    )
+    expect(await store.getOutfit('k1', '2026-01-01')).toEqual({ childId: 'k1', date: '2026-01-01', outfit: { top: 'a' } })
+    expect((await store.getOutfit('k1', '2026-01-02'))?.completedAt).toBe(1_700_000_000_000)
+    expect(await store.countCompletedDays('k1')).toBe(1)
+  })
+})
+
+describe('createIndexedDbStore: oude back-ups', () => {
+  it('een back-up zonder avatar, soundEnabled en completedAt laadt met standaardwaarden', async () => {
+    const store = freshStore()
+    await store.importBackup(
+      jsonBlob(
+        validBackup({
+          settings: { currentSeason: 'winter' },
+          outfits: [{ childId: 'k1', date: '2026-01-01', outfit: { top: 'a' } }],
+        }),
+      ),
+    )
+    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
+    expect(await store.listChildren()).toEqual([{ id: 'k1', name: 'Noor', color: '#ff8800', sizes: {}, createdAt: 1 }])
+    expect(await store.getOutfit('k1', '2026-01-01')).toEqual({ childId: 'k1', date: '2026-01-01', outfit: { top: 'a' } })
+    expect(await store.countCompletedDays('k1')).toBe(0)
+  })
+
+  it('verdraagt ongeldige avatar, soundEnabled en completedAt tegelijk', async () => {
+    const store = freshStore()
+    await store.importBackup(
+      jsonBlob(
+        validBackup({
+          settings: { currentSeason: 'summer', soundEnabled: null },
+          children: [{ id: 'k1', name: 'Noor', color: '#ff8800', sizes: {}, createdAt: 1, avatar: ['fox'] }],
+          outfits: [{ childId: 'k1', date: '2026-01-01', outfit: {}, completedAt: 'gisteren' }],
+        }),
+      ),
+    )
+    expect(await store.getSettings()).toEqual({ currentSeason: 'summer', soundEnabled: true })
+    expect((await store.listChildren())[0]).not.toHaveProperty('avatar')
+    expect(await store.getOutfit('k1', '2026-01-01')).not.toHaveProperty('completedAt')
   })
 })

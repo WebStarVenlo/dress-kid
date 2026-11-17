@@ -29,7 +29,7 @@ function deferred<T>() {
 
 function fakeStore(
   listItems: () => Promise<ClothingItem[]>,
-  getSettings: () => Promise<Settings> = () => Promise.resolve({ currentSeason: 'summer' }),
+  getSettings: () => Promise<Settings> = () => Promise.resolve({ currentSeason: 'summer', soundEnabled: true }),
 ): WardrobeStore {
   const notUsed = () => Promise.reject(new Error('niet gebruikt'))
   return {
@@ -47,6 +47,8 @@ function fakeStore(
     deleteChild: notUsed,
     getOutfit: notUsed,
     saveOutfit: notUsed,
+    markOutfitCompleted: notUsed,
+    countCompletedDays: notUsed,
     getParentPin: notUsed,
     setParentPin: notUsed,
     exportBackup: notUsed,
@@ -66,7 +68,7 @@ describe('useWardrobe', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.items).toBe(items)
-    expect(result.current.settings).toEqual({ currentSeason: 'summer' })
+    expect(result.current.settings).toEqual({ currentSeason: 'summer', soundEnabled: true })
     expect(result.current.error).toBeUndefined()
   })
 

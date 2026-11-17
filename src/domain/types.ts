@@ -1,4 +1,6 @@
 /** Gedeelde domeintypes voor Dress Kid. */
+import type { AvatarId } from './avatars';
+
 
 export type Category =
   | 'top'
@@ -92,6 +94,8 @@ export interface Child {
   name: string;
   /** CSS-kleur (hex, bijv. "#ff8800") voor de profieltegel. */
   color: string;
+  /** Optioneel dierfiguur als profielplaatje; zonder avatar toont de UI bijv. de eerste letter. */
+  avatar?: AvatarId;
   sizes: ChildSizes;
   createdAt: number;
 }
@@ -99,6 +103,8 @@ export interface Child {
 export interface NewChild {
   name: string;
   color: string;
+  /** Optioneel dierfiguur; een onbekende waarde wordt genegeerd. */
+  avatar?: AvatarId;
   sizes: ChildSizes;
 }
 
@@ -113,9 +119,11 @@ export interface StoredPin {
 
 export interface Settings {
   currentSeason: CurrentSeason;
+  /** "Geluid en voorlezen" in de kindmodus. Standaard aan; oude data en back-ups krijgen `true`. */
+  soundEnabled: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { currentSeason: 'all' };
+export const DEFAULT_SETTINGS: Settings = { currentSeason: 'all', soundEnabled: true };
 
 /** De keuze van het kind: maximaal één kledingstuk-id per categorie. */
 export type Outfit = Partial<Record<Category, string>>;
@@ -126,4 +134,9 @@ export interface SavedOutfit {
   /** Lokale datum, formaat YYYY-MM-DD. */
   date: string;
   outfit: Outfit;
+  /**
+   * Moment (epoch ms) waarop het kind die dag op "Klaar" tikte: dan is de sticker verdiend.
+   * Ontbreekt als de dag (nog) niet is afgerond. Blijft staan als de outfit later wijzigt.
+   */
+  completedAt?: number;
 }

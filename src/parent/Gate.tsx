@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { StoredPin } from '../domain/types'
+import { IconArrowLeft, IconLock } from '../shared/icons'
 import { getStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 import PinField from './PinField'
@@ -131,13 +132,21 @@ export default function Gate({ sum, onUnlock, store }: GateProps) {
 
   const loading = pinState.status === 'loading'
   return (
-    <main className={`page parent parent-gate${loading ? ' pin-gate-loading' : ''}`} aria-busy={loading}>
-      <h1>Ouderbeheer</h1>
-      {content}
-      <Link className="parent-link" to="/">
-        ← Terug
-      </Link>
-    </main>
+    <div className="parent-shell">
+      <main className={`page parent parent-gate${loading ? ' pin-gate-loading' : ''}`} aria-busy={loading}>
+        <div className="parent-gate-card">
+          <span className="parent-lock" aria-hidden="true">
+            <IconLock size={44} />
+          </span>
+          <h1>Ouderbeheer</h1>
+          {content}
+        </div>
+        <Link className="parent-link parent-link-quiet" to="/">
+          <IconArrowLeft size={18} />
+          Terug
+        </Link>
+      </main>
+    </div>
   )
 }
 

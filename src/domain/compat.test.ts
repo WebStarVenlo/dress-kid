@@ -28,9 +28,9 @@ function item(id: string, category: Category, extra: Partial<ClothingItem> = {})
   }
 }
 
-const ALL: Settings = { currentSeason: 'all' }
-const SUMMER: Settings = { currentSeason: 'summer' }
-const WINTER: Settings = { currentSeason: 'winter' }
+const ALL: Settings = { currentSeason: 'all', soundEnabled: true }
+const SUMMER: Settings = { currentSeason: 'summer', soundEnabled: true }
+const WINTER: Settings = { currentSeason: 'winter', soundEnabled: true }
 
 describe('isInSeason', () => {
   it('altijd waar als er geen seizoensfilter is', () => {

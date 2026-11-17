@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
+import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
 import type { Category, Child, ItemSeason } from '../domain/types'
 import { resizePhoto } from '../domain/image'
+import { IconCamera, IconCheck, IconImage } from '../shared/icons'
 import { requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
-import { ChoiceGroup, SizeField, Thumb, errorMessage, sizeSuggestions } from './shared'
+import { ITEM_SEASON_OPTIONS, ChoiceGroup, SizeField, Thumb, errorMessage, sizeSuggestions } from './shared'
 
 interface AddFlowProps {
   store: WardrobeStore
@@ -25,8 +26,6 @@ const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
   label: CATEGORY_LABELS[value],
   emoji: CATEGORY_EMOJI[value],
 }))
-const SEASONS: ItemSeason[] = ['summer', 'winter', 'all']
-const SEASON_OPTIONS = SEASONS.map((value) => ({ value, label: SEASON_LABELS[value] }))
 
 export default function AddFlow({ store, children, reload, onDone }: AddFlowProps) {
   const [category, setCategory] = useState<Category | undefined>()
@@ -73,17 +72,29 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
 
   return (
     <section aria-labelledby="parent-add-title">
-      <h2 id="parent-add-title">Kleding toevoegen</h2>
-      <ChoiceGroup legend="Wat is het?" value={category} options={CATEGORY_OPTIONS} onChange={setCategory} big />
-      <ChoiceGroup legend="Wanneer draagt je kind het?" value={season} options={SEASON_OPTIONS} onChange={setSeason} />
-      <SizeField value={size} suggestions={sizeSuggestions(children, category)} onChange={setSize} />
+      <div className="parent-title-row">
+        <h2 id="parent-add-title">Kleding toevoegen</h2>
+      </div>
+      <div className="parent-card parent-form">
+        <ChoiceGroup legend="Wat is het?" value={category} options={CATEGORY_OPTIONS} onChange={setCategory} variant="cards" />
+        <ChoiceGroup
+          legend="Wanneer draagt je kind het?"
+          value={season}
+          options={ITEM_SEASON_OPTIONS}
+          onChange={setSeason}
+          variant="segmented"
+        />
+        <SizeField value={size} suggestions={sizeSuggestions(children, category)} onChange={setSize} />
+      </div>
 
       <div className="parent-photo-actions">
         <button type="button" disabled={!ready} onClick={() => cameraRef.current?.click()}>
-          📷 Foto maken
+          <IconCamera size={24} />
+          Foto maken
         </button>
         <button type="button" className="secondary" disabled={!ready} onClick={() => galleryRef.current?.click()}>
-          🖼️ Kies uit galerij
+          <IconImage size={24} />
+          Kies uit galerij
         </button>
       </div>
       {category === undefined ? <p className="parent-hint">Kies eerst wat het is.</p> : null}
@@ -125,8 +136,13 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
       ) : null}
 
       {added.length > 0 ? (
-        <div className="parent-card">
-          <h3>Zojuist toegevoegd ({added.length})</h3>
+        <div className="parent-card parent-recent-card">
+          <h3>
+            <span className="parent-recent-check" aria-hidden="true">
+              <IconCheck size={16} />
+            </span>
+            Zojuist toegevoegd ({added.length})
+          </h3>
           <ul className="parent-recent">
             {added.map((entry) => (
               <li key={entry.id}>

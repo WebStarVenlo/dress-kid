@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { todayKey } from '../domain/compat'
+import { IconBackup, IconCheck, IconUndo } from '../shared/icons'
 import { getStorageInfo } from '../storage'
 import type { StorageInfo, WardrobeStore } from '../storage'
 import { errorMessage } from './shared'
@@ -19,7 +20,7 @@ function formatBytes(bytes: number): string {
 function StorageStatus({ info }: { info: StorageInfo }) {
   if (info.persisted === undefined && info.usage === undefined) return null
   return (
-    <div className="parent-card">
+    <div className="parent-card parent-storage">
       {info.persisted === true ? (
         <p>Opslag is beschermd tegen automatisch opruimen.</p>
       ) : info.persisted === false ? (
@@ -117,17 +118,21 @@ export default function BackupPanel({ store, reload }: Props) {
 
   return (
     <section aria-labelledby="parent-backup-title">
-      <h2 id="parent-backup-title">Back-up</h2>
-      <p>
+      <div className="parent-title-row">
+        <h2 id="parent-backup-title">Back-up</h2>
+      </div>
+      <p className="parent-lead">
         Alles wat je invoert staat alleen op dit apparaat. Raak je dit apparaat kwijt of wis je de gegevens van de
         browser, dan is de kledingkast weg. Maak daarom af en toe een back-up.
       </p>
       <StorageStatus info={storageInfo} />
       <div className="parent-stack">
         <button type="button" onClick={() => void download()}>
+          <IconBackup size={22} />
           Back-up maken
         </button>
         <button type="button" className="secondary" onClick={() => fileRef.current?.click()}>
+          <IconUndo size={22} />
           Back-up terugzetten
         </button>
       </div>
@@ -158,6 +163,7 @@ export default function BackupPanel({ store, reload }: Props) {
       ) : null}
       {message ? (
         <p role="status" className="parent-ok">
+          <IconCheck size={18} />
           {message}
         </p>
       ) : null}
