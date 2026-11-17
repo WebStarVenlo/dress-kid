@@ -12,6 +12,7 @@ import { hashPin, resetPinAttempts } from './pin'
 import { UNLOCK_KEY, UNLOCK_TTL_MS } from './unlock'
 
 vi.mock('../domain/image', () => ({
+  cropPhoto: vi.fn(async () => new Blob(['cropped'], { type: 'image/jpeg' })),
   resizePhoto: vi.fn(async (file: Blob) => {
     if ((file as File).name === 'kapot.png') throw new Error('Deze foto kan niet worden geopend.')
     return new Blob(['resized'], { type: 'image/jpeg' })
@@ -560,6 +561,8 @@ describe('persistente opslag bij toevoegen', () => {
     fireEvent.change(screen.getByLabelText("Foto's kiezen uit galerij"), {
       target: { files: [new File(['a'], 'a.png', { type: 'image/png' })] },
     })
+    // Eén foto: eerst de bijsnijdvraag, "Hele foto" houdt het oude gedrag.
+    fireEvent.click(screen.getByRole('button', { name: 'Hele foto' }))
     await screen.findByText('Zojuist toegevoegd (1)')
     expect(persist).toHaveBeenCalledTimes(2)
   })

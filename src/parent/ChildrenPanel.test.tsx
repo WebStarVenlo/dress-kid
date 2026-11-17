@@ -7,6 +7,7 @@ import ParentApp from './ParentApp'
 import { UNLOCK_KEY } from './unlock'
 
 vi.mock('../domain/image', () => ({
+  cropPhoto: vi.fn(async () => new Blob(['cropped'], { type: 'image/jpeg' })),
   resizePhoto: vi.fn(async () => new Blob(['resized'], { type: 'image/jpeg' })),
 }))
 
@@ -202,6 +203,8 @@ describe('maat bij kleding', () => {
     fireEvent.change(screen.getByLabelText("Foto's kiezen uit galerij"), {
       target: { files: [new File(['a'], 'a.png', { type: 'image/png' })] },
     })
+    // Eén foto: eerst de bijsnijdvraag, "Hele foto" houdt het oude gedrag.
+    fireEvent.click(screen.getByRole('button', { name: 'Hele foto' }))
     await screen.findByText('Zojuist toegevoegd (1)')
     const [item] = await store.listItems()
     expect(item?.size).toBe('110')

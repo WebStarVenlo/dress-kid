@@ -187,3 +187,10 @@ export const IconLock = (p: IconProps) => (
     <circle cx="12" cy="15.5" r="1.2" fill="currentColor" />
   </Icon>
 )
+
+export const IconCrop = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M6 2.5V18h15.5" />
+    <path d="M2.5 6H18v15.5" />
+  </Icon>
+)

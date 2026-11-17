@@ -2,10 +2,12 @@ import { useId, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
 import type { Category, Child, ClothingItem, ItemSeason } from '../domain/types'
-import { resizePhoto } from '../domain/image'
+import { cropPhoto, resizePhoto } from '../domain/image'
+import type { CropRect } from '../domain/image'
 import { itemFitsChild } from '../domain/sizes'
 import { usePhotoUrl } from '../shared/hooks'
-import { IconArrowLeft, IconCamera, IconTrash, IconWash } from '../shared/icons'
+import { IconArrowLeft, IconCamera, IconCrop, IconTrash, IconWash } from '../shared/icons'
+import CropDialog from './CropDialog'
 import type { WardrobeStore } from '../storage'
 import PhotoImport from './PhotoImport'
 import { ITEM_SEASON_OPTIONS, ChildAvatar, ChoiceGroup, SizeField, Thumb, errorMessage, itemLabel, sizeSuggestions } from './shared'
@@ -33,6 +35,8 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
   const [busy, setBusy] = useState(false)
   /** Optimistische uitsluitingen: id van ander kledingstuk -> verwachte stand. */
   const [optimistic, setOptimistic] = useState<Record<string, boolean>>({})
+  /** Bijsnijden van de huidige foto ('current') of van een nieuwe foto die de huidige vervangt. */
+  const [cropping, setCropping] = useState<{ kind: 'current' } | { kind: 'new'; file: File } | undefined>()
   const photoRef = useRef<HTMLInputElement>(null)
   const nameId = useId()
   const photoUrl = usePhotoUrl(item.photo)
@@ -71,17 +75,23 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
     if (file) void replacePhoto([file])
   }
 
-  async function replacePhoto(files: File[]) {
+  /** Een nieuwe foto gaat eerst langs het bijsnijden. */
+  function replacePhoto(files: File[]) {
     const file = files[0]
-    if (!file || busy) return
+    if (!file || busy || cropping) return
+    setCropping({ kind: 'new', file })
+  }
+
+  async function savePhoto(source: Blob, crop: CropRect | undefined, fallback: string) {
+    setCropping(undefined)
     setBusy(true)
     try {
       setError(undefined)
-      const photo = await resizePhoto(file)
+      const photo = crop ? await cropPhoto(source, crop) : await resizePhoto(source)
       await update({ photo })
     } catch (e) {
       console.error(e)
-      setError(errorMessage(e, 'De foto kon niet worden vervangen.'))
+      setError(errorMessage(e, fallback))
     } finally {
       setBusy(false)
     }
@@ -116,7 +126,7 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         <h2 id="parent-item-title">{itemLabel(item)}</h2>
       </div>
 
-      <PhotoImport compact disabled={busy} onFiles={replacePhoto}>
+      <PhotoImport compact disabled={busy || cropping !== undefined} onFiles={replacePhoto}>
         <div className="parent-detail-photo">
           {photoUrl ? <img src={photoUrl} alt={`Foto van ${itemLabel(item)}`} /> : null}
         </div>
@@ -130,10 +140,32 @@ export default function ItemDetail({ store, item, items, children, reload, onBac
         tabIndex={-1}
         onChange={pickPhoto}
       />
-      <button type="button" className="secondary parent-other-photo" disabled={busy} onClick={() => photoRef.current?.click()}>
-        <IconCamera size={22} />
-        Andere foto
-      </button>
+      <div className="parent-photo-tools">
+        <button type="button" className="secondary" disabled={busy} onClick={() => setCropping({ kind: 'current' })}>
+          <IconCrop size={22} />
+          Bijsnijden
+        </button>
+        <button type="button" className="secondary" disabled={busy} onClick={() => photoRef.current?.click()}>
+          <IconCamera size={22} />
+          Andere foto
+        </button>
+      </div>
+      {cropping?.kind === 'current' ? (
+        <CropDialog
+          photo={item.photo}
+          onCrop={(rect) => void savePhoto(item.photo, rect, 'Bijsnijden is niet gelukt.')}
+          onCancel={() => setCropping(undefined)}
+        />
+      ) : null}
+      {cropping?.kind === 'new' ? (
+        <CropDialog
+          photo={cropping.file}
+          title="Nieuwe foto bijsnijden"
+          onCrop={(rect) => void savePhoto(cropping.file, rect, 'De foto kon niet worden vervangen.')}
+          onWholePhoto={() => void savePhoto(cropping.file, undefined, 'De foto kon niet worden vervangen.')}
+          onCancel={() => setCropping(undefined)}
+        />
+      ) : null}
 
       {error ? (
         <p role="alert" className="parent-error">

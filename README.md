@@ -22,6 +22,10 @@ Ook een productfoto uit een webshop kan in de kast. Kies in **Kleding toevoegen*
 - **Slepen**: sleep de foto of een afbeeldingslink uit de webshop naar het sleepvlak.
 - **Afbeeldingslink**: plak de link van de afbeelding zelf (Afbeeldingsadres kopiëren) in het veld "Afbeeldingslink plakken" en kies "Ophalen". Lukt dat niet, dan staat de webshop het ophalen meestal niet toe; sla de foto dan op en kies hem uit de galerij.
 
+**iPhone en iPad.** Druk in Safari lang op de productfoto → **Kopieer**, en tik in Dress Kid op **Plak foto** (en daarna op "Plakken"). Lukt dat niet, maak dan een schermafbeelding van de webshoppagina, kies hem via **Kies uit galerij** en snijd hem bij.
+
+**Bijsnijden.** Voeg je één foto toe (uit elke bron), dan kun je hem eerst bijsnijden: sleep het kader of de hoeken en kies **Bijsnijden**, of **Hele foto** om hem zoals hij is te gebruiken. Bij meerdere foto's tegelijk wordt dit overgeslagen; bijsnijden kan altijd later via **Bijsnijden** bij het kledingstuk in de kast. Het kaartje "Van webshop" toont de stappen voor jouw apparaat; onder "Andere apparaten" staan de andere.
+
 **Android: Delen → Dress Kid.** Is de app geïnstalleerd (op het beginscherm gezet via Chrome), dan staat Dress Kid in het deelmenu. Druk in de webshop lang op de productfoto (of kies een foto in de galerij) en kies **Delen → Dress Kid**. De app opent de ouderomgeving; na het ouderslot staat het toevoegscherm klaar met de foto (maximaal 10 foto's van elk 10 MB). Kies wat het is, dan wordt de foto toegevoegd. Deel je alleen een pagina (een link zonder foto), dan komt de link in het linkveld te staan; dat werkt alleen als het een link naar de afbeelding zelf is. Op iPhone en iPad bestaat deze deelfunctie niet voor webapps; gebruik daar plakken of de galerij.
 
 ## Privacy en bewaren van gegevens

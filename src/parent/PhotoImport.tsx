@@ -8,6 +8,8 @@ import {
   photoImportMessage,
   readClipboardImage,
 } from '../domain/photoImport'
+import { detectPlatform } from '../domain/platform'
+import type { Platform } from '../domain/platform'
 
 interface Props {
   /** Verwerkt de binnengehaalde foto's. */
@@ -19,6 +21,52 @@ interface Props {
   children?: ReactNode
   /** Beginwaarde van het linkveld (bv. een gedeelde link); wordt niet automatisch opgehaald. */
   initialUrl?: string
+  /** Voor welk apparaat de uitleg is; standaard herkend uit de browser. */
+  platform?: Platform
+}
+
+interface Steps {
+  label: string
+  steps: string[]
+  note?: string
+}
+
+/** Korte uitleg per apparaat voor het kaartje "Van webshop". */
+export const WEBSHOP_STEPS: Record<Platform, Steps> = {
+  ios: {
+    label: 'iPhone en iPad',
+    steps: [
+      "Druk in Safari lang op de foto → Kopieer → tik hier op 'Plak foto' (en daarna op 'Plakken').",
+      'Lukt dat niet? Maak een schermafbeelding, kies hem via Galerij en snijd hem bij.',
+    ],
+    note: 'Delen naar Dress Kid kan op iPhone niet.',
+  },
+  android: {
+    label: 'Android',
+    steps: [
+      'Druk lang op de foto → Delen → Dress Kid (app moet geïnstalleerd zijn).',
+      "Of: druk lang op de foto → Afbeelding kopiëren → tik hier op 'Plak foto'.",
+    ],
+  },
+  desktop: {
+    label: 'Computer',
+    steps: ['Rechtsklik op de foto → Afbeelding kopiëren → Ctrl+V (Cmd+V op Mac) hier, of sleep de foto hierheen.'],
+  },
+}
+
+const PLATFORMS: Platform[] = ['ios', 'android', 'desktop']
+
+function StepList({ steps }: { steps: Steps }) {
+  return (
+    <>
+      <ol className="parent-import-steps">
+        {steps.steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      {steps.note ? <p className="parent-hint">{steps.note}</p> : null}
+    </>
+  )
 }
 
 function nameFor(blob: Blob) {
@@ -26,7 +74,9 @@ function nameFor(blob: Blob) {
 }
 
 /** Plakken, slepen of een link ophalen; levert gewone File-objecten op. */
-export default function PhotoImport({ onFiles, disabled, compact, children, initialUrl }: Props) {
+export default function PhotoImport({ onFiles, disabled, compact, children, initialUrl, platform: platformProp }: Props) {
+  const [detected] = useState(detectPlatform)
+  const platform = platformProp ?? detected
   const [url, setUrl] = useState(initialUrl ?? '')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | undefined>()
@@ -118,9 +168,21 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
     onDrop,
   }
   const off = disabled || loading
+  const pasteFirst = platform === 'ios' && !compact
+  const paste = canReadClipboardImage() ? (
+    <button
+      type="button"
+      className={pasteFirst ? 'parent-paste-main' : 'secondary'}
+      disabled={off}
+      onClick={() => void pasteButton()}
+    >
+      Plak foto
+    </button>
+  ) : null
 
   const controls = (
     <>
+      {pasteFirst ? paste : null}
       <div className="parent-import-url">
         <label htmlFor={urlId} className="parent-field-label">
           Afbeeldingslink plakken
@@ -144,11 +206,7 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
           </button>
         </div>
       </div>
-      {canReadClipboardImage() ? (
-        <button type="button" className="secondary" disabled={off} onClick={() => void pasteButton()}>
-          Plak foto
-        </button>
-      ) : null}
+      {pasteFirst ? null : paste}
       {loading ? (
         <p role="status" className="parent-progress">
           Foto ophalen…
@@ -176,7 +234,18 @@ export default function PhotoImport({ onFiles, disabled, compact, children, init
   return (
     <section className="parent-card parent-import" aria-labelledby={`${urlId}-title`}>
       <h3 id={`${urlId}-title`}>Van webshop</h3>
-      <p className="parent-hint">Rechtsklik (of druk lang) op de foto in de webshop → Afbeelding kopiëren → plak hier (Ctrl+V).</p>
+      <div className="parent-import-help" data-platform={platform}>
+        <StepList steps={WEBSHOP_STEPS[platform]} />
+        <details className="parent-import-other">
+          <summary>Andere apparaten</summary>
+          {PLATFORMS.filter((other) => other !== platform).map((other) => (
+            <div key={other}>
+              <h4>{WEBSHOP_STEPS[other].label}</h4>
+              <StepList steps={WEBSHOP_STEPS[other]} />
+            </div>
+          ))}
+        </details>
+      </div>
       <div {...dropProps} className={`parent-dropzone${dragging ? ' is-dragging' : ''}`}>
         Of sleep een foto of afbeeldingslink hierheen
       </div>
