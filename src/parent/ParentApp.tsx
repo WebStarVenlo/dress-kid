@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { SHARED_FLAG, takeShared } from '../domain/sharedPhotos'
 import { useChildren, useWardrobe } from '../shared/hooks'
 import { IconArrowRight, IconBackup, IconChildren, IconSettings, IconWardrobe } from '../shared/icons'
 import { getStore, requestPersistentStorage } from '../storage'
@@ -78,7 +79,11 @@ export interface ParentAppProps {
   makeSum?: () => Sum
 }
 
-type View = { name: 'wardrobe' } | { name: 'add' } | { name: 'item'; id: string } | { name: 'settings' } | { name: 'backup' } | { name: 'children' }
+type View =
+  | { name: 'wardrobe' }
+  /** files/url: gedeeld via "Delen → Dress Kid"; shareId maakt er een vers toevoegscherm van. */
+  | { name: 'add'; files?: File[]; url?: string; shareId?: number }
+  | { name: 'item'; id: string } | { name: 'settings' } | { name: 'backup' } | { name: 'children' }
 
 export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps) {
   const [unlocked, setUnlocked] = useState(() => isUnlocked())
@@ -104,6 +109,46 @@ export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps
   return <ParentMain store={store ?? getStore()} />
 }
 
+/**
+ * Gedeeld via het deelmenu (Android): de service worker heeft de foto's klaargezet en doorgestuurd
+ * naar `#/ouder?gedeeld=1`. Dit draait pas na het ouderslot (ParentMain), dus de foto's wachten
+ * tot de ouder ontgrendeld heeft. Met de vlag opent altijd het toevoegscherm, ook als er niets
+ * bruikbaars meekwam; zonder vlag alleen als er nog foto's of een link klaarstaan.
+ */
+function useSharedPhotos(setView: (view: View) => void) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const flagged = new URLSearchParams(location.search).has(SHARED_FLAG)
+  // Eén keer per mount; een ref blijft bewaard bij de dubbele effecten van StrictMode.
+  const checked = useRef(false)
+  const latest = useRef({ flagged, location, navigate, setView })
+  useEffect(() => {
+    latest.current = { flagged, location, navigate, setView }
+  })
+
+  useEffect(() => {
+    if (checked.current) return
+    checked.current = true
+    const { flagged: wasFlagged, location: at, navigate: go } = latest.current
+    if (wasFlagged) {
+      // Haal de vlag uit de URL, zodat herladen het toevoegscherm niet opnieuw opent.
+      const params = new URLSearchParams(at.search)
+      params.delete(SHARED_FLAG)
+      const search = params.toString()
+      void go({ pathname: at.pathname, search: search ? `?${search}` : '', hash: at.hash }, { replace: true })
+    }
+    void takeShared().then(({ files, url }) => {
+      if (!wasFlagged && files.length === 0 && url === undefined) return
+      latest.current.setView({
+        name: 'add',
+        files: files.length > 0 ? files : undefined,
+        url,
+        shareId: Date.now(),
+      })
+    })
+  }, [])
+}
+
 const TABS = [
   { name: 'wardrobe', label: 'Kast', Icon: IconWardrobe },
   { name: 'children', label: 'Kinderen', Icon: IconChildren },
@@ -115,6 +160,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
   const { items, settings, loading, error, reload } = useWardrobe(store)
   const { children, loading: childrenLoading, error: childrenError, reload: reloadChildren } = useChildren(store)
   const [view, setView] = useState<View>({ name: 'wardrobe' })
+  useSharedPhotos(setView)
 
   // Vraag de browser de kledingkast te beschermen tegen automatisch opruimen.
   useEffect(() => {
@@ -144,7 +190,17 @@ function ParentMain({ store }: { store: WardrobeStore }) {
       </div>
     )
   } else if (view.name === 'add') {
-    content = <AddFlow store={store} children={children} reload={reload} onDone={goHome} />
+    content = (
+      <AddFlow
+        key={view.shareId ?? 'add'}
+        store={store}
+        children={children}
+        reload={reload}
+        onDone={goHome}
+        initialFiles={view.files}
+        initialUrl={view.url}
+      />
+    )
   } else if (view.name === 'item') {
     content = open ? (
       <ItemDetail

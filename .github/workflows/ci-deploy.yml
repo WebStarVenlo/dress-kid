@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           mkdir stage
           cp -R dist/. stage/
-          for f in index.html sw.js registerSW.js manifest.webmanifest; do
+          for f in index.html sw.js share-target-sw.js registerSW.js manifest.webmanifest; do
             rm -f "stage/$f"
           done
           az storage blob upload-batch \
@@ -91,6 +91,7 @@ jobs:
           for entry in \
             "manifest.webmanifest|application/manifest+json" \
             "registerSW.js|application/javascript" \
+            "share-target-sw.js|application/javascript" \
             "sw.js|application/javascript" \
             "index.html|text/html; charset=utf-8"; do
             name="${entry%%|*}"

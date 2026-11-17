@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { StrictMode } from 'react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { openDB } from 'idb'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, vi } from 'vitest'
+import { SHARE_DB_NAME, SHARE_DB_VERSION, SHARE_STORE, takeShared } from '../domain/sharedPhotos'
 import type { Category, ClothingItem } from '../domain/types'
 import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
@@ -19,9 +21,15 @@ vi.mock('../domain/image', () => ({
 let dbCounter = 0
 let store: WardrobeStore
 
-function renderParent() {
+function CurrentUrl() {
+  const location = useLocation()
+  return <output data-testid="url">{location.pathname + location.search}</output>
+}
+
+function renderParent(entry = '/ouder') {
   return render(
-    <MemoryRouter initialEntries={['/ouder']}>
+    <MemoryRouter initialEntries={[entry]}>
+      <CurrentUrl />
       <Routes>
         <Route path="/ouder/*" element={<ParentApp store={store} makeSum={() => ({ a: 7, b: 6 })} />} />
         <Route path="/" element={<p>kind</p>} />
@@ -40,7 +48,27 @@ async function unlock() {
   await screen.findByRole('button', { name: 'Kleding toevoegen' })
 }
 
-beforeEach(() => {
+/** Zet een deling klaar zoals public/share-target-sw.js dat doet. */
+async function putShared(records: object[]) {
+  const db = await openDB(SHARE_DB_NAME, SHARE_DB_VERSION, {
+    upgrade(upgrading) {
+      if (!upgrading.objectStoreNames.contains(SHARE_STORE)) upgrading.createObjectStore(SHARE_STORE, { autoIncrement: true })
+    },
+  })
+  for (const record of records) await db.add(SHARE_STORE, record)
+  db.close()
+}
+
+const sharedPhoto = (name: string) => ({
+  kind: 'photo',
+  name,
+  type: 'image/png',
+  data: new TextEncoder().encode(name).buffer,
+  sharedAt: Date.now(),
+})
+
+beforeEach(async () => {
+  await takeShared()
   sessionStorage.clear()
   store = createIndexedDbStore(`parent-test-${++dbCounter}`)
   let n = 0
@@ -246,6 +274,73 @@ describe('toevoegen', () => {
     expect(items.every((i) => i.category === 'top' && i.season === 'summer')).toBe(true)
     expect(screen.getByText('Zojuist toegevoegd (2)')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /Shirt/ })).toHaveAttribute('aria-checked', 'true')
+  })
+})
+
+describe('delen naar Dress Kid', () => {
+  it('opent na het ouderslot het toevoegscherm met de gedeelde foto\'s', async () => {
+    await putShared([sharedPhoto('jurk.png'), sharedPhoto('shirt.png')])
+    renderParent('/ouder?gedeeld=1')
+    // Achter het slot blijven de foto's wachten.
+    expect(screen.getByLabelText(/Hoeveel is 7 × 6/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/Hoeveel is 7 × 6/), { target: { value: '42' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Openen' }))
+
+    expect(await screen.findByText("2 foto's staan klaar. Kies eerst wat het is.")).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Kleding toevoegen' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent(/^\/ouder$/))
+
+    fireEvent.click(screen.getByRole('radio', { name: /Jurk/ }))
+    await screen.findByText('Zojuist toegevoegd (2)')
+    const items = await store.listItems()
+    expect(items).toHaveLength(2)
+    expect(items.every((i) => i.category === 'dress')).toBe(true)
+    // De wachtrij is leeg: niet nog eens toevoegen.
+    expect(await takeShared()).toEqual({ files: [] })
+  })
+
+  it('opent het toevoegscherm ook zonder vlag als er nog foto\'s klaarstaan', async () => {
+    await putShared([sharedPhoto('a.png')])
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now()))
+    renderParent()
+    expect(await screen.findByText('1 foto staat klaar. Kies eerst wat het is.')).toBeInTheDocument()
+  })
+
+  it('verliest de gedeelde foto\'s niet in StrictMode', async () => {
+    await putShared([sharedPhoto('a.png')])
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now()))
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/ouder?gedeeld=1']}>
+          <ParentApp store={store} makeSum={() => ({ a: 7, b: 6 })} />
+        </MemoryRouter>
+      </StrictMode>,
+    )
+    expect(await screen.findByText('1 foto staat klaar. Kies eerst wat het is.')).toBeInTheDocument()
+  })
+
+  it('zet een gedeelde link zonder foto in het linkveld', async () => {
+    await putShared([{ kind: 'link', url: 'https://shop.nl/jurk', sharedAt: Date.now() }])
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now()))
+    renderParent('/ouder?gedeeld=1')
+    await waitFor(() => expect(screen.getByLabelText('Afbeeldingslink plakken')).toHaveValue('https://shop.nl/jurk'))
+    expect(screen.getByText('Kies eerst wat het is.')).toBeInTheDocument()
+  })
+
+  it('opent met de vlag een leeg toevoegscherm als er niets bruikbaars meekwam', async () => {
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now()))
+    renderParent('/ouder?gedeeld=1')
+    expect(await screen.findByRole('heading', { name: 'Kleding toevoegen' })).toBeInTheDocument()
+    expect(screen.getByText('Kies eerst wat het is.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Afbeeldingslink plakken')).toHaveValue('')
+  })
+
+  it('toont gewoon de kast als er niets gedeeld is', async () => {
+    sessionStorage.setItem(UNLOCK_KEY, String(Date.now()))
+    renderParent()
+    expect(await screen.findByRole('button', { name: 'Kleding toevoegen' })).toBeInTheDocument()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(screen.queryByRole('heading', { name: 'Kleding toevoegen' })).not.toBeInTheDocument()
   })
 })
 

@@ -66,7 +66,7 @@ describe('AddFlow van webshop', () => {
 
   it('verwerkt initialFiles zodra een categorie gekozen is', async () => {
     renderFlow([new File(['a'], 'gedeeld.png', { type: 'image/png' })])
-    expect(screen.getByText(/staan klaar/)).toBeInTheDocument()
+    expect(screen.getByText('1 foto staat klaar. Kies eerst wat het is.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: /Shirt/ }))
     await screen.findByText('Zojuist toegevoegd (1)')
   })

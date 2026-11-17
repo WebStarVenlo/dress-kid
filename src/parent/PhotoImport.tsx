@@ -17,6 +17,8 @@ interface Props {
   compact?: boolean
   /** Inhoud van het sleepvlak, bv. een foto. Zonder inhoud een eigen vlak. */
   children?: ReactNode
+  /** Beginwaarde van het linkveld (bv. een gedeelde link); wordt niet automatisch opgehaald. */
+  initialUrl?: string
 }
 
 function nameFor(blob: Blob) {
@@ -24,8 +26,8 @@ function nameFor(blob: Blob) {
 }
 
 /** Plakken, slepen of een link ophalen; levert gewone File-objecten op. */
-export default function PhotoImport({ onFiles, disabled, compact, children }: Props) {
-  const [url, setUrl] = useState('')
+export default function PhotoImport({ onFiles, disabled, compact, children, initialUrl }: Props) {
+  const [url, setUrl] = useState(initialUrl ?? '')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | undefined>()
   const [dragging, setDragging] = useState(false)

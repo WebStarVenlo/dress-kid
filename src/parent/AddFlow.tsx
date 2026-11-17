@@ -16,6 +16,8 @@ interface AddFlowProps {
   onDone: () => void
   /** Foto's die direct verwerkt worden (bv. gedeeld vanuit een andere app); wachten op een gekozen categorie. */
   initialFiles?: File[]
+  /** Gedeelde link zonder foto: komt in het linkveld te staan. */
+  initialUrl?: string
 }
 
 interface Added {
@@ -30,7 +32,7 @@ const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
   emoji: CATEGORY_EMOJI[value],
 }))
 
-export default function AddFlow({ store, children, reload, onDone, initialFiles }: AddFlowProps) {
+export default function AddFlow({ store, children, reload, onDone, initialFiles, initialUrl }: AddFlowProps) {
   const [category, setCategory] = useState<Category | undefined>()
   const [season, setSeason] = useState<ItemSeason>('all')
   const [size, setSize] = useState('')
@@ -121,10 +123,14 @@ export default function AddFlow({ store, children, reload, onDone, initialFiles 
       </div>
       {category === undefined ? (
         <p className="parent-hint">
-          {pending.length > 0 ? `${pending.length} foto's staan klaar. Kies eerst wat het is.` : 'Kies eerst wat het is.'}
+          {pending.length === 1
+            ? '1 foto staat klaar. Kies eerst wat het is.'
+            : pending.length > 1
+              ? `${pending.length} foto's staan klaar. Kies eerst wat het is.`
+              : 'Kies eerst wat het is.'}
         </p>
       ) : null}
-      <PhotoImport onFiles={processFiles} disabled={busy} />
+      <PhotoImport onFiles={processFiles} disabled={busy} initialUrl={initialUrl} />
       <input
         ref={cameraRef}
         className="parent-file"
