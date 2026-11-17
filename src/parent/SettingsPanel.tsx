@@ -1,16 +1,18 @@
 import { useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { CurrentSeason, Settings } from '../domain/types'
+import { AppError, translateError } from '../i18n/AppError'
 import { IconSnowflake, IconSparkle, IconSpeaker, IconSun } from '../shared/icons'
 import type { WardrobeStore } from '../storage'
 import PinSettings from './PinSettings'
-import { ChoiceGroup, errorMessage } from './shared'
+import { ChoiceGroup } from './shared'
 
-const OPTIONS = [
-  { value: 'summer', label: 'Zomer', icon: <IconSun size={20} /> },
-  { value: 'winter', label: 'Winter', icon: <IconSnowflake size={20} /> },
-  { value: 'all', label: 'Alles tonen', icon: <IconSparkle size={20} /> },
-] as const satisfies ReadonlyArray<{ value: CurrentSeason; label: string; icon: ReactNode }>
+const OPTION_ICONS = {
+  summer: <IconSun size={20} />,
+  winter: <IconSnowflake size={20} />,
+  all: <IconSparkle size={20} />,
+} as const satisfies Record<CurrentSeason, ReactNode>
 
 interface Props {
   store: WardrobeStore
@@ -19,6 +21,12 @@ interface Props {
 }
 
 export default function SettingsPanel({ store, settings, reload }: Props) {
+  const { t } = useTranslation('settings')
+  const options = [
+    { value: 'summer', label: t('settings.seasonSummer'), icon: OPTION_ICONS.summer },
+    { value: 'winter', label: t('settings.seasonWinter'), icon: OPTION_ICONS.winter },
+    { value: 'all', label: t('settings.seasonAll'), icon: OPTION_ICONS.all },
+  ] as const satisfies ReadonlyArray<{ value: CurrentSeason; label: string; icon: ReactNode }>
   const [error, setError] = useState<string | undefined>()
   const [saved, setSaved] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -26,9 +34,9 @@ export default function SettingsPanel({ store, settings, reload }: Props) {
   const soundTitleId = useId()
   const soundHelpId = useId()
 
-  /** Bewaart een wijziging; bij settings wordt altijd het hele object vervangen. */
+  /** Saves a change; for settings the whole object is always replaced. */
   async function save(changes: Partial<Settings>) {
-    // Tijdens het opslaan geen tweede wijziging: `settings` is dan nog niet herladen.
+    // No second change while saving: `settings` has not been reloaded yet.
     if (savingRef.current) return
     savingRef.current = true
     setBusy(true)
@@ -40,7 +48,7 @@ export default function SettingsPanel({ store, settings, reload }: Props) {
       setSaved(true)
     } catch (e) {
       console.error(e)
-      setError(errorMessage(e, 'Opslaan is niet gelukt.'))
+      setError(e instanceof AppError ? translateError(e) : e instanceof Error && e.message ? e.message : t('settings.saveFailed'))
     } finally {
       savingRef.current = false
       setBusy(false)
@@ -50,20 +58,17 @@ export default function SettingsPanel({ store, settings, reload }: Props) {
   return (
     <section aria-labelledby="parent-settings-title">
       <div className="parent-title-row">
-        <h2 id="parent-settings-title">Instellingen</h2>
+        <h2 id="parent-settings-title">{t('settings.title')}</h2>
       </div>
       <div className="parent-card parent-form">
         <ChoiceGroup
-          legend="Huidig seizoen"
+          legend={t('settings.season')}
           value={settings.currentSeason}
-          options={OPTIONS}
+          options={options}
           onChange={(currentSeason) => void save({ currentSeason })}
           variant="segmented"
         />
-        <p className="parent-hint">
-          Je kind ziet alleen kleding van dit seizoen, plus de stukken die je op &ldquo;Altijd&rdquo; hebt gezet. Bij
-          &ldquo;Alles tonen&rdquo; ziet je kind alles.
-        </p>
+        <p className="parent-hint">{t('settings.seasonHint')}</p>
       </div>
       <div className="parent-card parent-form">
         <button
@@ -80,9 +85,9 @@ export default function SettingsPanel({ store, settings, reload }: Props) {
             <IconSpeaker size={24} />
           </span>
           <span className="parent-switch-text">
-            <span id={soundTitleId} className="parent-switch-title">Geluid en voorlezen</span>
+            <span id={soundTitleId} className="parent-switch-title">{t('settings.soundTitle')}</span>
             <span id={soundHelpId} className="parent-switch-help">
-              Geluidjes en voorlezen van de vragen in de kindmodus.
+              {t('settings.soundHelp')}
             </span>
           </span>
           <span className="parent-switch" aria-hidden="true" />
@@ -90,7 +95,7 @@ export default function SettingsPanel({ store, settings, reload }: Props) {
       </div>
       {saved ? (
         <p role="status" className="parent-ok">
-          Opgeslagen.
+          {t('settings.saved')}
         </p>
       ) : null}
       {error ? (
