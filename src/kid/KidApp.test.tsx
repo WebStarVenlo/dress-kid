@@ -346,6 +346,31 @@ describe('KidApp', () => {
       expect(await screen.findByText('Je hebt 1 sticker!')).toBeInTheDocument()
     })
 
+    it('toont geen stickerboek maar rondt de dag wel af als stickers uit staan', async () => {
+      const store = emptyStore()
+      const noor = await store.addChild({ name: 'Noor', color: '#3366ff', stickersEnabled: false, sizes: {} })
+      await add(store, 'top', 'Gele trui')
+      const countSpy = vi.spyOn(store, 'countCompletedDays')
+      renderKid(store)
+      click(await screen.findByRole('button', { name: 'Gele trui' }))
+      click(screen.getByRole('button', { name: /Klaar/ }))
+      expect(await screen.findByRole('heading', { name: 'Dit trek ik vandaag aan!' })).toBeInTheDocument()
+      expect(countSpy).not.toHaveBeenCalled()
+      await waitFor(async () => expect(await store.countCompletedDays(noor.id)).toBe(1))
+      expect(screen.queryByText(/Je hebt/)).not.toBeInTheDocument()
+      expect(document.querySelector('.kid-book')).toBeNull()
+    })
+
+    it('toont het stickerboek als stickersEnabled expliciet aan staat', async () => {
+      const store = emptyStore()
+      await store.addChild({ name: 'Noor', color: '#3366ff', stickersEnabled: true, sizes: {} })
+      await add(store, 'top', 'Gele trui')
+      renderKid(store)
+      click(await screen.findByRole('button', { name: 'Gele trui' }))
+      click(screen.getByRole('button', { name: /Klaar/ }))
+      expect(await screen.findByText('Je hebt 1 sticker!')).toBeInTheDocument()
+    })
+
     it('toont geen stickerboek als er nog niets verdiend is', async () => {
       const store = await newStore()
       const sam = await childId(store, 'Sam')

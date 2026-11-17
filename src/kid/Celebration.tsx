@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import { stickersOn } from '../domain/types'
 import type { Child, ClothingItem } from '../domain/types'
 import { AnimalAvatar, AVATAR_COLORS } from '../shared/AnimalAvatar'
 import { playSound } from '../shared/feedback'
@@ -38,12 +39,13 @@ export function Celebration({
   extraAction?: ReactNode
   onChange: () => void
 }) {
+  const withStickers = stickersOn(child)
   // Het "pling" van de nieuwe sticker valt samen met de animatie.
   useEffect(() => {
-    if (!fresh || stickers === undefined || stickers === 0) return undefined
+    if (!withStickers || !fresh || stickers === undefined || stickers === 0) return undefined
     const timer = window.setTimeout(() => playSound('sticker'), prefersReducedMotion() ? 0 : STICKER_DELAY_MS)
     return () => window.clearTimeout(timer)
-  }, [fresh, stickers])
+  }, [withStickers, fresh, stickers])
 
   return (
     <section className="kid-party">
@@ -73,7 +75,7 @@ export function Celebration({
             </li>
           ))}
         </ul>
-        {stickers !== undefined && stickers > 0 ? <StickerBook child={child} count={stickers} fresh={fresh} /> : null}
+        {withStickers && stickers !== undefined && stickers > 0 ? <StickerBook child={child} count={stickers} fresh={fresh} /> : null}
       </div>
 
       <div className="kid-party__actions">

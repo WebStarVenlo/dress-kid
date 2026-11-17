@@ -2,8 +2,11 @@ import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
 import type { Category, Child, ItemSeason } from '../domain/types'
-import { resizePhoto } from '../domain/image'
+import { cropPhoto, resizePhoto } from '../domain/image'
+import type { CropRect } from '../domain/image'
 import { IconCamera, IconCheck, IconImage } from '../shared/icons'
+import CropDialog from './CropDialog'
+import PhotoImport from './PhotoImport'
 import { requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
 import { ITEM_SEASON_OPTIONS, ChoiceGroup, SizeField, Thumb, errorMessage, sizeSuggestions } from './shared'
@@ -13,6 +16,10 @@ interface AddFlowProps {
   children: Child[]
   reload: () => Promise<void>
   onDone: () => void
+  /** Foto's die direct verwerkt worden (bv. gedeeld vanuit een andere app); wachten op een gekozen categorie. */
+  initialFiles?: File[]
+  /** Gedeelde link zonder foto: komt in het linkveld te staan. */
+  initialUrl?: string
 }
 
 interface Added {
@@ -27,7 +34,7 @@ const CATEGORY_OPTIONS = CATEGORIES.map((value) => ({
   emoji: CATEGORY_EMOJI[value],
 }))
 
-export default function AddFlow({ store, children, reload, onDone }: AddFlowProps) {
+export default function AddFlow({ store, children, reload, onDone, initialFiles, initialUrl }: AddFlowProps) {
   const [category, setCategory] = useState<Category | undefined>()
   const [season, setSeason] = useState<ItemSeason>('all')
   const [size, setSize] = useState('')
@@ -36,26 +43,56 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
   const [progress, setProgress] = useState<{ done: number; total: number } | undefined>()
   const cameraRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
+  const [pending, setPending] = useState<File[]>(initialFiles ?? [])
+  /** Eén losse foto wacht op bijsnijden (of "Hele foto"). */
+  const [cropping, setCropping] = useState<{ file: File; category: Category } | undefined>()
   const busy = progress !== undefined
 
-  async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
+  function handleInput(event: ChangeEvent<HTMLInputElement>) {
     const input = event.target
     const files = Array.from(input.files ?? [])
     input.value = ''
-    if (files.length === 0 || !category) return
+    void processFiles(files)
+  }
+
+  /**
+   * Gemeenschappelijke ingang: galerij, camera, plakken, slepen, link en gedeelde bestanden.
+   * Eén foto mag eerst bijgesneden worden; bij meerdere foto's tegelijk slaan we dat over
+   * (bijsnijden kan later per kledingstuk).
+   */
+  async function processFiles(files: File[], chosen: Category | undefined = category) {
+    if (files.length === 0 || busy || cropping) return
+    if (!chosen) {
+      setPending((prev) => [...prev, ...files])
+      return
+    }
+    if (files.length === 1) {
+      setCropping({ file: files[0]!, category: chosen })
+      return
+    }
+    await saveFiles(files, chosen)
+  }
+
+  function finishCrop(crop: CropRect | undefined) {
+    if (!cropping) return
+    setCropping(undefined)
+    void saveFiles([cropping.file], cropping.category, crop)
+  }
+
+  async function saveFiles(files: File[], chosen: Category, crop?: CropRect) {
     setErrors([])
     setProgress({ done: 0, total: files.length })
     const failures: string[] = []
     let requestedPersist = false
     for (const [index, file] of files.entries()) {
       try {
-        const photo = await resizePhoto(file)
-        const item = await store.addItem({ category, season, size: size.trim() || undefined, photo })
+        const photo = crop ? await cropPhoto(file, crop) : await resizePhoto(file)
+        const item = await store.addItem({ category: chosen, season, size: size.trim() || undefined, photo })
         if (!requestedPersist) {
           requestedPersist = true
           void requestPersistentStorage()
         }
-        setAdded((prev) => [{ id: item.id, category, photo: item.photo }, ...prev])
+        setAdded((prev) => [{ id: item.id, category: chosen, photo: item.photo }, ...prev])
       } catch (error) {
         console.error(error)
         const reason = errorMessage(error, 'Opslaan is niet gelukt.')
@@ -66,6 +103,19 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
     setErrors(failures)
     setProgress(undefined)
     await reload()
+  }
+
+  /** Foto's uit de wachtrij verwerken, met de keuzes (soort, seizoen, maat) zoals ze nu staan. */
+  function addPending() {
+    if (pending.length === 0 || !category) return
+    const files = pending
+    setPending([])
+    void processFiles(files, category)
+  }
+
+  function leave() {
+    if (pending.length > 0 && !window.confirm(`Er staan nog ${pending.length} foto's klaar. Weggooien?`)) return
+    onDone()
   }
 
   const ready = category !== undefined && !busy
@@ -97,7 +147,38 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
           Kies uit galerij
         </button>
       </div>
-      {category === undefined ? <p className="parent-hint">Kies eerst wat het is.</p> : null}
+      {category === undefined ? (
+        <p className="parent-hint">
+          {pending.length === 1
+            ? '1 foto staat klaar. Kies eerst wat het is.'
+            : pending.length > 1
+              ? `${pending.length} foto's staan klaar. Kies eerst wat het is.`
+              : 'Kies eerst wat het is.'}
+        </p>
+      ) : pending.length > 0 ? (
+        <div className="parent-card">
+          <p className="parent-hint">
+            {pending.length === 1 ? '1 foto staat klaar.' : `${pending.length} foto's staan klaar.`} Controleer seizoen en maat en voeg ze dan toe.
+          </p>
+          <div className="parent-stack">
+            <button type="button" disabled={busy || cropping !== undefined} onClick={addPending}>
+              {pending.length === 1 ? 'Foto toevoegen' : `${pending.length} foto's toevoegen`}
+            </button>
+            <button type="button" className="secondary" disabled={busy} onClick={() => setPending([])}>
+              Weggooien
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <PhotoImport onFiles={processFiles} disabled={busy || cropping !== undefined} initialUrl={initialUrl} />
+      {cropping ? (
+        <CropDialog
+          photo={cropping.file}
+          onCrop={(rect) => finishCrop(rect)}
+          onWholePhoto={() => finishCrop(undefined)}
+          onCancel={() => setCropping(undefined)}
+        />
+      ) : null}
       <input
         ref={cameraRef}
         className="parent-file"
@@ -106,7 +187,7 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
         capture="environment"
         aria-label="Foto maken"
         tabIndex={-1}
-        onChange={(event) => void handleFiles(event)}
+        onChange={handleInput}
       />
       <input
         ref={galleryRef}
@@ -116,7 +197,7 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
         multiple
         aria-label="Foto's kiezen uit galerij"
         tabIndex={-1}
-        onChange={(event) => void handleFiles(event)}
+        onChange={handleInput}
       />
 
       {progress ? (
@@ -151,11 +232,11 @@ export default function AddFlow({ store, children, reload, onDone }: AddFlowProp
               </li>
             ))}
           </ul>
-          <p className="parent-hint">Nog een? Kies hierboven opnieuw een foto, de keuzes blijven staan.</p>
+          <p className="parent-hint">Nog een? Kies hierboven opnieuw een foto, de keuzes blijven staan. Bijsnijden kan later ook nog, bij het kledingstuk in de kast.</p>
         </div>
       ) : null}
 
-      <button type="button" className="secondary parent-done" onClick={onDone} disabled={busy}>
+      <button type="button" className="secondary parent-done" onClick={leave} disabled={busy}>
         Klaar
       </button>
     </section>

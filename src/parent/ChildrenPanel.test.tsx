@@ -7,6 +7,7 @@ import ParentApp from './ParentApp'
 import { UNLOCK_KEY } from './unlock'
 
 vi.mock('../domain/image', () => ({
+  cropPhoto: vi.fn(async () => new Blob(['cropped'], { type: 'image/jpeg' })),
   resizePhoto: vi.fn(async () => new Blob(['resized'], { type: 'image/jpeg' })),
 }))
 
@@ -105,6 +106,21 @@ describe('kinderen beheren', () => {
     expect(child?.sizes.bottom).toEqual(['104', '110'])
   })
 
+  it('zet stickers per kind aan of uit', async () => {
+    await store.addChild({ name: 'Sam', color: '#112233', sizes: {} })
+    await renderUnlocked()
+    await openChildren()
+    fireEvent.click(screen.getByRole('button', { name: 'Wijzig Sam' }))
+    const toggle = screen.getByRole('switch', { name: 'Stickers' })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await waitFor(async () => expect((await store.listChildren())[0]?.stickersEnabled).toBe(false))
+    fireEvent.click(await screen.findByRole('button', { name: 'Wijzig Sam' }))
+    expect(screen.getByRole('switch', { name: 'Stickers' })).toHaveAttribute('aria-checked', 'false')
+  })
+
   it('kiest bij het toevoegen een dierfiguur uit de kiezer', async () => {
     await renderUnlocked()
     await openChildren()
@@ -187,6 +203,8 @@ describe('maat bij kleding', () => {
     fireEvent.change(screen.getByLabelText("Foto's kiezen uit galerij"), {
       target: { files: [new File(['a'], 'a.png', { type: 'image/png' })] },
     })
+    // Eén foto: eerst de bijsnijdvraag, "Hele foto" houdt het oude gedrag.
+    fireEvent.click(screen.getByRole('button', { name: 'Hele foto' }))
     await screen.findByText('Zojuist toegevoegd (1)')
     const [item] = await store.listItems()
     expect(item?.size).toBe('110')

@@ -1,6 +1,11 @@
-/** Verkleinen van foto's voordat ze worden opgeslagen. */
+/** Verkleinen en bijsnijden van foto's voordat ze worden opgeslagen. */
+import { clampCropRect } from './crop'
+import type { CropRect, PixelRect } from './crop'
+
+export type { CropRect } from './crop'
 
 const DECODE_ERROR = 'Deze foto kan niet worden geopend. Kies een andere foto (bijvoorbeeld JPG of PNG).'
+const EMPTY_CROP_ERROR = 'Het bijsnijkader is leeg. Kies een groter stuk van de foto.'
 
 /**
  * Berekent de afmetingen zodat de langste zijde maximaal `maxSize` is, met behoud van
@@ -71,6 +76,22 @@ function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
   })
 }
 
+/** Tekent (een deel van) de gedecodeerde foto op wit, verkleind tot `maxSize`, als JPEG. */
+async function renderJpeg(decoded: Decoded, src: PixelRect, maxSize: number, quality: number): Promise<Blob> {
+  const size = fitWithin(src.sw, src.sh, maxSize)
+  const canvas = document.createElement('canvas')
+  canvas.width = size.width
+  canvas.height = size.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('De foto kon niet worden verkleind.')
+  // JPEG kent geen transparantie: wit in plaats van zwart achter doorzichtige PNG's.
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, size.width, size.height)
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(decoded.source, src.sx, src.sy, src.sw, src.sh, 0, 0, size.width, size.height)
+  return canvasToJpeg(canvas, quality)
+}
+
 /**
  * Decodeert een foto (met EXIF-oriëntatie), verkleint zodat de langste zijde maximaal
  * `maxSize` pixels is en exporteert als JPEG.
@@ -79,18 +100,25 @@ export async function resizePhoto(file: Blob, maxSize = 800, quality = 0.8): Pro
   const decoded = await decode(file)
   try {
     if (!(decoded.width > 0) || !(decoded.height > 0)) throw new Error(DECODE_ERROR)
-    const size = fitWithin(decoded.width, decoded.height, maxSize)
-    const canvas = document.createElement('canvas')
-    canvas.width = size.width
-    canvas.height = size.height
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('De foto kon niet worden verkleind.')
-    // JPEG kent geen transparantie: wit in plaats van zwart achter doorzichtige PNG's.
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, size.width, size.height)
-    ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(decoded.source, 0, 0, size.width, size.height)
-    return await canvasToJpeg(canvas, quality)
+    return await renderJpeg(decoded, { sx: 0, sy: 0, sw: decoded.width, sh: decoded.height }, maxSize, quality)
+  } finally {
+    decoded.release()
+  }
+}
+
+/**
+ * Snijdt een foto bij tot `rect` (fracties 0..1, of pixels met `unit: 'px'`), verkleint tot
+ * `maxSize` en exporteert als JPEG. Het kader wordt binnen de foto gehouden; blijft er niets
+ * over, dan volgt een fout.
+ */
+export async function cropPhoto(file: Blob, rect: CropRect, maxSize = 800, quality = 0.8): Promise<Blob> {
+  if (!(rect.w > 0) || !(rect.h > 0)) throw new Error(EMPTY_CROP_ERROR)
+  const decoded = await decode(file)
+  try {
+    if (!(decoded.width > 0) || !(decoded.height > 0)) throw new Error(DECODE_ERROR)
+    const src = clampCropRect(rect, decoded.width, decoded.height)
+    if (!src) throw new Error(EMPTY_CROP_ERROR)
+    return await renderJpeg(decoded, src, maxSize, quality)
   } finally {
     decoded.release()
   }

@@ -10,6 +10,7 @@ import {
   visibleCategories,
 } from '../domain/compat'
 import { itemFitsChild } from '../domain/sizes'
+import { stickersOn } from '../domain/types'
 import type { Category, Child, ClothingItem, Outfit, Settings } from '../domain/types'
 import { canSpeak, playSound, setFeedbackEnabled, speak, vibrate } from '../shared/feedback'
 import { useChildren, useWardrobe } from '../shared/hooks'
@@ -260,8 +261,9 @@ function KidDay({
   }, [loading, error, items, settings, activeStore, child.id, day, clearAdvance])
 
   // Op het feestscherm het stickerboek tellen (ook als de dag al eerder klaar was).
+  const stickersEnabled = stickersOn(child)
   useEffect(() => {
-    if (screen !== 'done' || marking || stickers !== undefined) return undefined
+    if (screen !== 'done' || marking || stickers !== undefined || !stickersEnabled) return undefined
     let cancelled = false
     activeStore.countCompletedDays(child.id).then(
       (count) => {
@@ -272,7 +274,7 @@ function KidDay({
     return () => {
       cancelled = true
     }
-  }, [screen, marking, stickers, activeStore, child.id])
+  }, [screen, marking, stickers, stickersEnabled, activeStore, child.id])
 
   // Is het inmiddels een nieuwe dag? Zo ja, begin opnieuw met een lege outfit en meld dat terug.
   const rollOverIfNeeded = useCallback((): boolean => {

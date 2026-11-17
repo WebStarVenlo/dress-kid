@@ -286,6 +286,14 @@ function normalizeSettings(value: unknown): Settings {
   }
 }
 
+/** Zet `stickersEnabled` op een kopie van `base` als het een echte boolean is; anders (ook ontbreken) blijft het weg = aan. */
+function withStickers<T extends object>(base: T, value: unknown): T & { stickersEnabled?: boolean } {
+  const result: T & { stickersEnabled?: boolean } = { ...base }
+  delete result.stickersEnabled
+  if (typeof value === 'boolean') result.stickersEnabled = value
+  return result
+}
+
 /** Zet de avatar op een kopie van `base` als hij geldig is, of haalt hem weg. */
 function withAvatar<T extends object>(base: T, avatar: unknown): T & { avatar?: AvatarId } {
   const result: T & { avatar?: AvatarId } = { ...base }
@@ -377,19 +385,23 @@ function orInvalid<T>(fn: () => T, detail: string): T {
 function parseChild(value: unknown, index: number): Child {
   const label = `kind ${index + 1}`
   if (!isRecord(value)) throw invalid(`${label} is ongeldig`)
-  const { id, name, color, avatar, sizes, createdAt } = value
+  const { id, name, color, avatar, stickersEnabled, sizes, createdAt } = value
   if (typeof id !== 'string' || !id) throw invalid(`${label} heeft geen geldige id`)
   if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) throw invalid(`${label} heeft een ongeldige datum`)
   // Een onbekende avatar (bijv. uit een nieuwere app-versie) laten we stil vallen.
-  return withAvatar<Child>(
-    {
-      id,
-      name: orInvalid(() => cleanChildName(name), `${label} heeft een ongeldige naam`),
-      color: orInvalid(() => cleanColor(color), `${label} heeft een ongeldige kleur`),
-      sizes: orInvalid(() => cleanChildSizes(sizes ?? {}), `${label} heeft ongeldige maten`),
-      createdAt,
-    },
-    avatar,
+  // Oudere back-ups hebben geen `stickersEnabled`; dat (en een ongeldige waarde) wordt stickers aan.
+  return withStickers(
+    withAvatar<Child>(
+      {
+        id,
+        name: orInvalid(() => cleanChildName(name), `${label} heeft een ongeldige naam`),
+        color: orInvalid(() => cleanColor(color), `${label} heeft een ongeldige kleur`),
+        sizes: orInvalid(() => cleanChildSizes(sizes ?? {}), `${label} heeft ongeldige maten`),
+        createdAt,
+      },
+      avatar,
+    ),
+    stickersEnabled,
   )
 }
 
@@ -726,15 +738,18 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
     },
 
     async addChild(input: NewChild) {
-      const child = withAvatar<Child>(
-        {
-          id: newId(),
-          name: cleanChildName(input.name),
-          color: cleanColor(input.color),
-          sizes: cleanChildSizes(input.sizes ?? {}),
-          createdAt: nextCreatedAt(),
-        },
-        input.avatar,
+      const child = withStickers(
+        withAvatar<Child>(
+          {
+            id: newId(),
+            name: cleanChildName(input.name),
+            color: cleanColor(input.color),
+            sizes: cleanChildSizes(input.sizes ?? {}),
+            createdAt: nextCreatedAt(),
+          },
+          input.avatar,
+        ),
+        input.stickersEnabled,
       )
       await (await db()).add('children', child)
       return { ...child, sizes: copySizes(child.sizes) }
@@ -753,15 +768,18 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
       const updated = await runInTx(tx, async () => {
         const existing = await tx.store.get(id)
         if (!existing) throw new Error(CHILD_NOT_FOUND)
-        const next = withAvatar<Child>(
-          {
-            id: existing.id,
-            name: name ?? existing.name,
-            color: color ?? existing.color,
-            sizes: sizes ?? existing.sizes,
-            createdAt: existing.createdAt,
-          },
-          clearAvatar ? undefined : (newAvatar ?? existing.avatar),
+        const next = withStickers(
+          withAvatar<Child>(
+            {
+              id: existing.id,
+              name: name ?? existing.name,
+              color: color ?? existing.color,
+              sizes: sizes ?? existing.sizes,
+              createdAt: existing.createdAt,
+            },
+            clearAvatar ? undefined : (newAvatar ?? existing.avatar),
+          ),
+          typeof changes.stickersEnabled === 'boolean' ? changes.stickersEnabled : existing.stickersEnabled,
         )
         await tx.store.put(next)
         return next
@@ -853,15 +871,18 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
         children: children
           .sort((a, b) => a.createdAt - b.createdAt)
           .map((child) =>
-            withAvatar<Child>(
-              {
-                id: child.id,
-                name: child.name,
-                color: child.color,
-                sizes: copySizes(child.sizes),
-                createdAt: child.createdAt,
-              },
-              child.avatar,
+            withStickers(
+              withAvatar<Child>(
+                {
+                  id: child.id,
+                  name: child.name,
+                  color: child.color,
+                  sizes: copySizes(child.sizes),
+                  createdAt: child.createdAt,
+                },
+                child.avatar,
+              ),
+              child.stickersEnabled,
             ),
           ),
         items: items

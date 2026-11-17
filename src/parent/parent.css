@@ -279,7 +279,7 @@ body:has(.parent-shell) {
 .parent-notice {
   grid-template-columns: auto 1fr;
   align-items: center;
-  background: #fff8e3;
+  background: var(--parent-soft);
   border-color: #f3dc94;
 }
 
@@ -778,8 +778,10 @@ body:has(.parent-shell) {
   border-radius: 18px;
 }
 
-.parent-shell .parent-other-photo {
-  width: 100%;
+.parent-photo-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
   margin-bottom: 4px;
 }
 
@@ -1315,4 +1317,202 @@ body:has(.parent-shell) {
   .parent-tab-icon {
     transition: none;
   }
+}
+
+/* Foto van webshop: plakken, slepen, link */
+.parent-import {
+  display: grid;
+  gap: 10px;
+}
+
+.parent-import h3 {
+  margin: 0;
+}
+
+.parent-import.is-compact {
+  margin-bottom: 8px;
+}
+
+.parent-dropzone {
+  border: 2px dashed var(--parent-line);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.parent-dropzone.is-dragging {
+  border-color: currentColor;
+  background: #fff8e3;
+}
+
+.parent-import-row {
+  display: flex;
+  gap: 8px;
+}
+
+.parent-import-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.parent-import-steps {
+  margin: 0;
+  padding-left: 1.3em;
+  display: grid;
+  gap: 4px;
+}
+
+.parent-import-help {
+  display: grid;
+  gap: 6px;
+}
+
+.parent-import-other summary {
+  cursor: pointer;
+  color: var(--grape-edge);
+  font-weight: 700;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.parent-import-other h4 {
+  margin: 8px 0 4px;
+}
+
+/* iPhone/iPad: plakken via de knop is de hoofdroute (geen Ctrl+V). */
+.parent-shell .parent-paste-main {
+  width: 100%;
+  min-height: 60px;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+/* Bijsnijden */
+/* Dimt alles buiten het kader; los van het kader zodat de grepen niet worden afgeknipt. */
+.parent-crop-shade {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.parent-crop-shade > div {
+  position: absolute;
+  box-shadow: 0 0 0 100vmax rgb(43 35 80 / 55%);
+}
+
+.parent-crop-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: rgb(43 35 80 / 55%);
+  overflow-y: auto;
+}
+
+.parent-crop {
+  width: 100%;
+  max-width: 560px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: var(--parent-card);
+  border: 1.5px solid var(--parent-line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 40px rgb(43 35 80 / 25%);
+}
+
+.parent-crop-stage {
+  display: grid;
+  place-items: center;
+  background: var(--parent-soft);
+  border-radius: 18px;
+  /* Ruimte voor de hoekgrepen die buiten de foto uitsteken. */
+  padding: 24px;
+}
+
+.parent-crop-frame {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.parent-crop-frame img {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  max-height: 70dvh;
+  -webkit-touch-callout: none;
+  pointer-events: none;
+}
+
+.parent-crop-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #fff;
+  outline: 1.5px solid var(--grape);
+  cursor: move;
+  touch-action: none;
+}
+
+.parent-shell .parent-crop-box:focus-visible {
+  outline: 3px solid var(--grape);
+  outline-offset: 0;
+}
+
+.parent-crop-handle {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  touch-action: none;
+}
+
+.parent-crop-handle::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--grape);
+  box-sizing: border-box;
+}
+
+.parent-crop-handle.is-nw {
+  left: -22px;
+  top: -22px;
+  cursor: nwse-resize;
+}
+
+.parent-crop-handle.is-ne {
+  right: -22px;
+  top: -22px;
+  cursor: nesw-resize;
+}
+
+.parent-crop-handle.is-sw {
+  left: -22px;
+  bottom: -22px;
+  cursor: nesw-resize;
+}
+
+.parent-crop-handle.is-se {
+  right: -22px;
+  bottom: -22px;
+  cursor: nwse-resize;
+}
+
+.parent-crop-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
 }

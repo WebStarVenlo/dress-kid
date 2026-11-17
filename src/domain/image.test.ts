@@ -1,4 +1,4 @@
-import { fitWithin, resizePhoto } from './image'
+import { cropPhoto, fitWithin, resizePhoto } from './image'
 
 describe('fitWithin', () => {
   it('verkleint liggende foto’s tot de maximale breedte', () => {
@@ -45,6 +45,67 @@ describe('resizePhoto', () => {
       imageSpy.mockRestore()
       URL.createObjectURL = originalCreate
       URL.revokeObjectURL = originalRevoke
+    }
+  })
+})
+
+describe('cropPhoto', () => {
+  function mockCanvas(width: number, height: number) {
+    const bitmap = { width, height, close: vi.fn() }
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => bitmap))
+    const ctx = { fillRect: vi.fn(), drawImage: vi.fn(), fillStyle: '', imageSmoothingQuality: 'low' }
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockImplementation((() => ctx) as unknown as HTMLCanvasElement['getContext'])
+    const toBlob = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation(function (this: HTMLCanvasElement, cb: BlobCallback, type?: string) {
+        cb(new Blob([`${this.width}x${this.height}`], { type }))
+      })
+    return {
+      bitmap,
+      ctx,
+      restore: () => {
+        getContext.mockRestore()
+        toBlob.mockRestore()
+        vi.unstubAllGlobals()
+      },
+    }
+  }
+
+  it('snijdt bij en verkleint naar een JPEG op witte achtergrond', async () => {
+    const m = mockCanvas(4000, 2000)
+    try {
+      const out = await cropPhoto(new Blob(['x']), { x: 0.25, y: 0, w: 0.5, h: 1 })
+      expect(out.type).toBe('image/jpeg')
+      expect(await out.text()).toBe('800x800')
+      expect(m.ctx.fillStyle).toBe('#ffffff')
+      expect(m.ctx.drawImage).toHaveBeenCalledWith(m.bitmap, 1000, 0, 2000, 2000, 0, 0, 800, 800)
+      expect(m.bitmap.close).toHaveBeenCalled()
+    } finally {
+      m.restore()
+    }
+  })
+
+  it('houdt een kader dat buiten de foto valt binnen de randen', async () => {
+    const m = mockCanvas(400, 300)
+    try {
+      await cropPhoto(new Blob(['x']), { x: 300, y: -50, w: 500, h: 200, unit: 'px' })
+      expect(m.ctx.drawImage).toHaveBeenCalledWith(m.bitmap, 300, 0, 100, 150, 0, 0, 100, 150)
+    } finally {
+      m.restore()
+    }
+  })
+
+  it('weigert een leeg kader', async () => {
+    const m = mockCanvas(400, 300)
+    try {
+      await expect(cropPhoto(new Blob(['x']), { x: 0.5, y: 0.5, w: 0, h: 0.2 })).rejects.toThrow(/bijsnijkader is leeg/)
+      await expect(cropPhoto(new Blob(['x']), { x: 2, y: 0, w: 0.5, h: 0.5 })).rejects.toThrow(/bijsnijkader is leeg/)
+      expect(m.ctx.drawImage).not.toHaveBeenCalled()
+      expect(m.bitmap.close).toHaveBeenCalledTimes(1)
+    } finally {
+      m.restore()
     }
   })
 })

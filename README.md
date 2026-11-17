@@ -7,15 +7,30 @@ Dress Kid is een kleine webapp waarmee kinderen (vanaf ongeveer 4 jaar) zelf hun
 - **Kinderomgeving** (`/#/`): het kind kiest per categorie (shirt, broek of rok, jurk, trui of vest, sokken, schoenen, jas, extraatje) een kledingstuk uit de kast. Een jurk kan niet samen met shirt en broek gekozen worden. De gekozen outfit wordt per dag onthouden; "Opnieuw beginnen" kan met een knop ongedaan gemaakt worden.
 - **Ouderomgeving** (`/#/ouder`): beheer van de kast, achter een eenvoudig ouderslot (een vermenigvuldigsom).
 - **Toevoegen**: kleding toevoegen met de camera of uit de galerij, ook meerdere foto's tegelijk. Van elk kledingstuk wordt een verkleinde foto (JPEG, maximaal 800 px) opgeslagen. Achteraf kun je de foto, naam, soort en seizoen aanpassen of het kledingstuk verwijderen.
+- **Foto's uit een webshop**: zie [Foto's uit een webshop toevoegen](#fotos-uit-een-webshop-toevoegen).
 - **Past niet bij**: je kunt aangeven welke kledingstukken niet samen gedragen worden. Dit geldt in beide richtingen.
 - **Seizoen**: kleding is gemarkeerd als zomer, winter of altijd. Het seizoen dat de ouder instelt, bepaalt wat het kind ziet.
 - **In de was**: een kledingstuk kan tijdelijk op niet-beschikbaar worden gezet, zonder het te verwijderen.
 - **Back-up**: de hele kast (inclusief foto's) kan geëxporteerd en weer geïmporteerd worden als één JSON-bestand. Op apparaten die dat ondersteunen verschijnt het deelmenu (handig op iPhone en iPad), anders wordt het bestand gedownload. Het terugzetten weigert bestanden groter dan 200 MB en foto's groter dan 10 MB.
 - **Offline en installeerbaar**: als PWA werkt de app zonder internet en kan hij op het startscherm van telefoon of tablet worden gezet.
 
+## Foto's uit een webshop toevoegen
+
+Ook een productfoto uit een webshop kan in de kast. Kies in **Kleding toevoegen** eerst wat het is en gebruik dan het blok "Van webshop":
+
+- **Plakken**: kopieer de foto in de webshop (rechtsklik of lang drukken → Afbeelding kopiëren) en plak hem met Ctrl+V of de knop "Plak foto" (als de browser dat ondersteunt).
+- **Slepen**: sleep de foto of een afbeeldingslink uit de webshop naar het sleepvlak.
+- **Afbeeldingslink**: plak de link van de afbeelding zelf (Afbeeldingsadres kopiëren) in het veld "Afbeeldingslink plakken" en kies "Ophalen". Lukt dat niet, dan staat de webshop het ophalen meestal niet toe; sla de foto dan op en kies hem uit de galerij.
+
+**iPhone en iPad.** Druk in Safari lang op de productfoto → **Kopieer**, en tik in Dress Kid op **Plak foto** (en daarna op "Plakken"). Lukt dat niet, maak dan een schermafbeelding van de webshoppagina, kies hem via **Kies uit galerij** en snijd hem bij.
+
+**Bijsnijden.** Voeg je één foto toe (uit elke bron), dan kun je hem eerst bijsnijden: sleep het kader of de hoeken en kies **Bijsnijden**, of **Hele foto** om hem zoals hij is te gebruiken. Bij meerdere foto's tegelijk wordt dit overgeslagen; bijsnijden kan altijd later via **Bijsnijden** bij het kledingstuk in de kast. Het kaartje "Van webshop" toont de stappen voor jouw apparaat; onder "Andere apparaten" staan de andere.
+
+**Android: Delen → Dress Kid.** Is de app geïnstalleerd (op het beginscherm gezet via Chrome), dan staat Dress Kid in het deelmenu. Druk in de webshop lang op de productfoto (of kies een foto in de galerij) en kies **Delen → Dress Kid**. De app opent de ouderomgeving; na het ouderslot staat het toevoegscherm klaar met de foto (maximaal 10 foto's van elk 10 MB). Kies wat het is, dan wordt de foto toegevoegd. Deel je alleen een pagina (een link zonder foto), dan komt de link in het linkveld te staan; dat werkt alleen als het een link naar de afbeelding zelf is. Op iPhone en iPad bestaat deze deelfunctie niet voor webapps; gebruik daar plakken of de galerij.
+
 ## Privacy en bewaren van gegevens
 
-- Alle gegevens blijven op het apparaat. De app heeft geen server en stuurt niets naar het internet. De kast staat in de opslag van de browser (IndexedDB). Elk apparaat heeft dus zijn eigen kast: er is geen synchronisatie. Wil je dezelfde kast op een tweede apparaat, gebruik dan een back-up.
+- Alle gegevens blijven op het apparaat. De app heeft geen server en stuurt niets naar het internet. Alleen als je zelf een afbeeldingslink plakt (of deelt) en op "Ophalen" drukt, haalt de app die ene afbeelding op bij de site van die link; verder wordt er niets opgehaald of verstuurd. Gedeelde foto's worden alleen op het apparaat tijdelijk klaargezet tot je ze in het toevoegscherm verwerkt. De kast staat in de opslag van de browser (IndexedDB). Elk apparaat heeft dus zijn eigen kast: er is geen synchronisatie. Wil je dezelfde kast op een tweede apparaat, gebruik dan een back-up.
 - De browser mag opgeslagen gegevens van een site opruimen als het apparaat vol raakt, tenzij de site "persistente opslag" heeft. De app vraagt hier bij het openen van de ouderomgeving en na het toevoegen van kleding om, maar de browser beslist. Zet de app daarom op het beginscherm (dat vergroot de kans op bescherming, vooral op iOS) en maak regelmatig een back-up. In het tabblad Back-up zie je of de opslag beschermd is en hoeveel ruimte de kast ongeveer gebruikt.
 - Wis je de browsergegevens van de site, of raak je het apparaat kwijt, dan is de kast weg als er geen back-up is.
 - Het ouderslot is **geen echte beveiliging**. Het houdt alleen een jong kind uit de beheeromgeving; wie kan rekenen of de code leest, komt er gewoon in. Het slot gaat weer dicht zodra je via de link terug naar de kinderomgeving gaat of de ouderpagina verlaat, en na 5 minuten zonder activiteit of met een verborgen pagina. Opnieuw laden binnen die tijd houdt de ouderomgeving open.
@@ -118,10 +133,10 @@ az storage blob upload-batch --account-name "$ACCOUNT" --auth-mode login \
   -d '$web' -s dist --overwrite
 ```
 
-Let op: `index.html`, `sw.js`, `registerSW.js` en `manifest.webmanifest` moeten niet gecachet worden, zodat updates van de app direct aankomen. De deploy-workflow uploadt eerst alle andere bestanden en daarna deze vier (met `no-cache`, `index.html` als laatste). Handmatig kun je ze zo een `no-cache`-header geven:
+Let op: `index.html`, `sw.js`, `share-target-sw.js`, `registerSW.js` en `manifest.webmanifest` moeten niet gecachet worden, zodat updates van de app direct aankomen. De deploy-workflow uploadt eerst alle andere bestanden en daarna deze vijf (met `no-cache`, `index.html` als laatste). Handmatig kun je ze zo een `no-cache`-header geven:
 
 ```bash
-for f in index.html sw.js registerSW.js manifest.webmanifest; do
+for f in index.html sw.js share-target-sw.js registerSW.js manifest.webmanifest; do
   az storage blob update --account-name "$ACCOUNT" --auth-mode login \
     --container-name '$web' --name "$f" --content-cache-control "no-cache"
 done
