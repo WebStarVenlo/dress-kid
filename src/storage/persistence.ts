@@ -1,6 +1,6 @@
 /**
- * Hulpfuncties rond "persistente opslag": zonder die toestemming mag de browser de IndexedDB
- * van de site opruimen als het apparaat vol raakt. Alles is feature-detected en gooit nooit.
+ * Helpers around "persistent storage": without that permission the browser may clear the site's
+ * IndexedDB when the device runs low on space. Everything is feature-detected and never throws.
  */
 
 export interface StorageInfo {
@@ -17,7 +17,7 @@ function storageManager(): StorageManager | undefined {
   }
 }
 
-/** Vraagt de browser de opslag te beschermen. `undefined` als de browser dit niet ondersteunt of het mislukt. */
+/** Asks the browser to protect the storage. `undefined` if the browser does not support this or it fails. */
 export async function requestPersistentStorage(): Promise<boolean | undefined> {
   try {
     const storage = storageManager()
@@ -29,7 +29,7 @@ export async function requestPersistentStorage(): Promise<boolean | undefined> {
   }
 }
 
-/** Geeft de bekende gegevens over de opslag; velden ontbreken als de browser ze niet kent. */
+/** Returns the known storage figures; fields are missing if the browser does not know them. */
 export async function getStorageInfo(): Promise<StorageInfo> {
   const info: StorageInfo = {}
   const storage = storageManager()
@@ -37,7 +37,7 @@ export async function getStorageInfo(): Promise<StorageInfo> {
   try {
     if (typeof storage.persisted === 'function') info.persisted = await storage.persisted()
   } catch {
-    // Onbekend; veld blijft weg.
+    // Unknown; the field stays absent.
   }
   try {
     if (typeof storage.estimate === 'function') {
@@ -46,7 +46,7 @@ export async function getStorageInfo(): Promise<StorageInfo> {
       if (typeof quota === 'number') info.quota = quota
     }
   } catch {
-    // Onbekend; velden blijven weg.
+    // Unknown; the fields stay absent.
   }
   return info
 }

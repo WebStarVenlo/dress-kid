@@ -1,16 +1,17 @@
-/** React-hooks die zowel de kind- als de ouderomgeving gebruiken. */
+/** React hooks used by both the child and the parent area. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_SETTINGS } from '../domain/types'
 import type { Child, ClothingItem, Settings } from '../domain/types'
+import { AppError, translateError } from '../i18n/AppError'
 import { getStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 
 // ---------------------------------------------------------------------------
 // usePhotoUrl
 //
-// Object-URL's worden per Blob gedeeld en met een referentieteller bijgehouden. Zo blijft de URL
-// geldig in StrictMode (effecten draaien daar mount → cleanup → mount) en wordt hij pas
-// ingetrokken als geen enkel gemount component hem nog gebruikt.
+// Object URLs are shared per Blob and tracked with a reference counter. This keeps the URL
+// valid in StrictMode (effects run mount → cleanup → mount there) and only revokes it
+// once no mounted component uses it any more.
 
 interface UrlEntry {
   url: string
@@ -19,7 +20,7 @@ interface UrlEntry {
 }
 
 const urlCache = new WeakMap<Blob, UrlEntry>()
-/** Een URL die wel gerenderd maar nooit gemount werd, ruimen we na deze tijd op. */
+/** A URL that was rendered but never mounted is cleaned up after this time. */
 const ORPHAN_DELAY_MS = 30_000
 
 function scheduleRevoke(photo: Blob, entry: UrlEntry, delay: number): void {
@@ -45,7 +46,7 @@ function peekPhotoUrl(photo: Blob): string {
 
 function acquirePhotoUrl(photo: Blob, url: string): () => void {
   const entry = urlCache.get(photo)
-  // Niet (meer) in de cache: dan is de URL al vervangen; niets bij te houden.
+  // No longer in the cache: the URL was already replaced; nothing to track.
   if (!entry || entry.url !== url) return () => undefined
   entry.refs += 1
   if (entry.timer !== undefined) {
@@ -58,7 +59,7 @@ function acquirePhotoUrl(photo: Blob, url: string): () => void {
   }
 }
 
-/** Geeft een object-URL voor de foto; die wordt ingetrokken bij wisselen of unmounten. */
+/** Returns an object URL for the photo; it is revoked on change or unmount. */
 export function usePhotoUrl(photo: Blob | undefined): string | undefined {
   const url = useMemo(() => (photo ? peekPhotoUrl(photo) : undefined), [photo])
   useEffect(() => {
@@ -74,14 +75,13 @@ export function usePhotoUrl(photo: Blob | undefined): string | undefined {
 export interface WardrobeState {
   items: ClothingItem[]
   settings: Settings
-  /** True totdat de eerste keer laden klaar is (gelukt of mislukt). */
+  /** True until the first load has finished (succeeded or failed). */
   loading: boolean
   error: string | undefined
-  /** Haalt kledingstukken en instellingen opnieuw op. Gooit nooit; fouten komen in `error`. */
+  /** Reloads items and settings. Never throws; failures end up in `error`. */
   reload: () => Promise<void>
 }
 
-const LOAD_ERROR = 'De kledingkast kon niet worden geladen. Probeer het opnieuw.'
 
 interface LoadedState {
   items: ClothingItem[]
@@ -97,7 +97,7 @@ const INITIAL_STATE: LoadedState = {
   error: undefined,
 }
 
-/** Laadt de kledingstukken en instellingen uit de opslag. */
+/** Loads the items and settings from storage. */
 export function useWardrobe(store: WardrobeStore = getStore()): WardrobeState {
   const [state, setState] = useState<LoadedState>(INITIAL_STATE)
   const mountedRef = useRef(false)
@@ -111,9 +111,9 @@ export function useWardrobe(store: WardrobeStore = getStore()): WardrobeState {
       next = { items, settings, error: undefined }
     } catch (error) {
       console.error(error)
-      next = { error: LOAD_ERROR }
+      next = { error: translateError(new AppError('wardrobeLoadFailed')) }
     }
-    // Alleen het laatst gestarte verzoek telt, en niet meer na unmount.
+    // Only the most recently started request counts, and not after unmount.
     if (!mountedRef.current || request !== requestRef.current) return
     setState((prev) => ({ ...prev, ...next, loading: false }))
   }, [store])
@@ -134,14 +134,13 @@ export function useWardrobe(store: WardrobeStore = getStore()): WardrobeState {
 
 export interface ChildrenState {
   children: Child[]
-  /** True totdat de eerste keer laden klaar is (gelukt of mislukt). */
+  /** True until the first load has finished (succeeded or failed). */
   loading: boolean
   error: string | undefined
-  /** Haalt de kinderen opnieuw op. Gooit nooit; fouten komen in `error`. */
+  /** Reloads the children. Never throws; failures end up in `error`. */
   reload: () => Promise<void>
 }
 
-const CHILDREN_LOAD_ERROR = 'De kinderen konden niet worden geladen. Probeer het opnieuw.'
 
 interface LoadedChildren {
   children: Child[]
@@ -149,7 +148,7 @@ interface LoadedChildren {
   error: string | undefined
 }
 
-/** Laadt de kinderen uit de opslag, in de volgorde waarin ze zijn toegevoegd. */
+/** Loads the children from storage, in the order they were added. */
 export function useChildren(store: WardrobeStore = getStore()): ChildrenState {
   const [state, setState] = useState<LoadedChildren>({ children: [], loading: true, error: undefined })
   const mountedRef = useRef(false)
@@ -162,7 +161,7 @@ export function useChildren(store: WardrobeStore = getStore()): ChildrenState {
       next = { children: await store.listChildren(), error: undefined }
     } catch (error) {
       console.error(error)
-      next = { error: CHILDREN_LOAD_ERROR }
+      next = { error: translateError(new AppError('childrenLoadFailed')) }
     }
     if (!mountedRef.current || request !== requestRef.current) return
     setState((prev) => ({ ...prev, ...next, loading: false }))

@@ -14,7 +14,7 @@ interface ShareTargetApi {
   handleShare: (request: { formData: () => Promise<FormData> }, scope: string, idb: IDBFactory) => Promise<Response>
 }
 
-/** Laadt het service-workerscript zoals importScripts dat doet, maar zonder fetch-listener. */
+/** Loads the service worker script the way importScripts does, but without a fetch listener. */
 function loadServiceWorkerScript(): ShareTargetApi {
   const fakeSelf: Record<string, unknown> = {}
   new Function('self', swSource)(fakeSelf)
@@ -138,7 +138,7 @@ describe('service worker (share-target-sw.js)', () => {
     form.append('photos', image('gedeeld.png'))
     const response = await sw.handleShare({ formData: async () => form }, SCOPE, indexedDB)
     expect(response.status).toBe(303)
-    expect(response.headers.get('location')).toBe(`${SCOPE}#/ouder?gedeeld=1`)
+    expect(response.headers.get('location')).toBe(`${SCOPE}#/parent?shared=1`)
     expect((await takeSharedPhotos()).map((f) => f.name)).toEqual(['gedeeld.png'])
   })
 

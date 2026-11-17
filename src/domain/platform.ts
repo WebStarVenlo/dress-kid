@@ -1,9 +1,9 @@
-/** Grof onderscheid tussen apparaten, voor de juiste uitleg. */
+/** Coarse distinction between devices, for the right instructions. */
 export type Platform = 'ios' | 'android' | 'desktop'
 
 /**
- * Herkent iPhone/iPad, Android of computer. iPadOS doet zich voor als Mac; een "Mac"
- * met meer dan één aanraakpunt is dus een iPad.
+ * Recognises iPhone/iPad, Android or computer. iPadOS pretends to be a Mac; a "Mac"
+ * with more than one touch point is therefore an iPad.
  */
 export function detectPlatform(
   ua: string = typeof navigator !== 'undefined' ? navigator.userAgent : '',

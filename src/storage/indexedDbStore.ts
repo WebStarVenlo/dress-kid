@@ -1,9 +1,9 @@
 /**
- * IndexedDB-implementatie van WardrobeStore (via `idb`).
+ * IndexedDB implementation of WardrobeStore (via `idb`).
  *
- * Foto's worden intern opgeslagen als `{ type, data: ArrayBuffer }` in plaats van als Blob.
- * Dat werkt betrouwbaar in alle browsers (oudere Safari-versies hadden problemen met Blobs in
- * IndexedDB) én in tests met fake-indexeddb. Naar buiten toe is `photo` altijd een Blob.
+ * Photos are stored internally as `{ type, data: ArrayBuffer }` instead of as a Blob.
+ * That works reliably in all browsers (older Safari versions had problems with Blobs in
+ * IndexedDB) and in tests with fake-indexeddb. Outwardly `photo` is always a Blob.
  */
 import { openDB } from 'idb'
 import type { DBSchema, IDBPDatabase, IDBPTransaction, StoreNames } from 'idb'
@@ -25,19 +25,20 @@ import type {
   Settings,
   StoredPin,
 } from '../domain/types'
+import { AppError, translateError } from '../i18n/AppError'
+import type { ErrorCode } from '../i18n/AppError'
 import type { WardrobeStore } from './api'
 
 /**
- * Versie 2: meerdere kinderen, maten en ouder-PIN. Bij een upgrade vanaf versie 1 worden alle
- * stores leeggegooid en opnieuw aangemaakt (de app was toen nog niet in gebruik).
+ * Version 2: multiple children, sizes and parent PIN. An upgrade from version 1 drops all
+ * stores and recreates them (the app was not in use yet at that point).
  */
 const DB_VERSION = 2
 const SETTINGS_KEY = 'settings'
 const PIN_KEY = 'parentPin'
 const BACKUP_APP = 'dress-kid'
 const BACKUP_VERSION = 1
-const INVALID_BACKUP = 'Dit is geen geldig Dress Kid back-upbestand.'
-/** Grenzen voor het importeren van een back-up (bescherming tegen per ongeluk gekozen grote bestanden). */
+/** Limits for importing a backup (protection against accidentally chosen large files). */
 const MAX_BACKUP_BYTES = 200 * 1024 * 1024
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024
 const MAX_NAME_LENGTH = 60
@@ -45,9 +46,7 @@ const MAX_SIZE_LENGTH = 20
 const MAX_CHILD_NAME_LENGTH = 40
 const COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
 
-const CHILD_NOT_FOUND = 'Dit kind bestaat niet (meer).'
-
-/** Afbeeldingstypes die we uit een back-up accepteren (bewust geen SVG: kan scripts bevatten). */
+/** Image types we accept from a backup (deliberately no SVG: it can contain scripts). */
 const ALLOWED_IMAGE_TYPES = new Set([
   'image/jpeg',
   'image/jpg',
@@ -68,8 +67,8 @@ interface StoredPhoto {
 interface StoredItem extends Omit<ClothingItem, 'photo'> {
   photo: StoredPhoto
   /**
-   * Uniek label voor de huidige foto; verandert bij elke nieuwe foto. Oudere records hebben dit
-   * veld niet; dan wordt een label afgeleid van type en grootte (zie `photoKey`).
+   * Unique label for the current photo; changes with every new photo. Older records lack this
+   * field; a label is then derived from type and size (see `photoKey`).
    */
   photoRev?: string
 }
@@ -78,9 +77,9 @@ interface DressKidDB extends DBSchema {
   items: { key: string; value: StoredItem }
   settings: { key: string; value: Settings }
   children: { key: string; value: Child }
-  /** Sleutel: [childId, date]. */
+  /** Key: [childId, date]. */
   outfits: { key: [string, string]; value: SavedOutfit; indexes: { childId: string } }
-  /** Alleen de ouder-PIN (sleutel `PIN_KEY`); valt bewust buiten de back-up. */
+  /** Only the parent PIN (key `PIN_KEY`); deliberately excluded from the backup. */
   pin: { key: string; value: StoredPin }
 }
 
@@ -88,7 +87,7 @@ type Names = StoreNames<DressKidDB>
 type Tx<S extends Names[], M extends IDBTransactionMode> = IDBPTransaction<DressKidDB, S, M>
 
 // ---------------------------------------------------------------------------
-// Hulpfuncties
+// Helpers
 
 function newId(): string {
   const c = globalThis.crypto as Crypto | undefined
@@ -99,7 +98,7 @@ function newId(): string {
   } else {
     for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
   }
-  // RFC 4122 versie 4
+  // RFC 4122 version 4
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
@@ -113,7 +112,7 @@ function readWithFileReader<T extends string | ArrayBuffer>(
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(reader.result as T)
-    reader.onerror = () => reject(reader.error ?? new Error('Het bestand kon niet worden gelezen.'))
+    reader.onerror = () => reject(reader.error ?? new AppError('fileReadFailed'))
     if (mode === 'text') reader.readAsText(blob)
     else reader.readAsArrayBuffer(blob)
   })
@@ -131,7 +130,7 @@ async function blobToText(blob: Blob): Promise<string> {
 
 async function toStoredPhoto(photo: Blob): Promise<StoredPhoto> {
   if (!photo || typeof photo !== 'object' || typeof photo.size !== 'number') {
-    throw new Error('De foto ontbreekt of is ongeldig.')
+    throw new AppError('photoMissing')
   }
   return { type: photo.type || 'image/jpeg', data: await blobToArrayBuffer(photo) }
 }
@@ -165,7 +164,7 @@ function photoToDataUrl(photo: StoredPhoto): string {
 }
 
 function cleanName(name: string | undefined): string | undefined {
-  // Op codepoints knippen, zodat een surrogaatpaar (emoji) niet doormidden gaat.
+  // Cut on code points so a surrogate pair (emoji) is not split in half.
   const trimmed = name === undefined ? undefined : Array.from(name.trim()).slice(0, MAX_NAME_LENGTH).join('').trim()
   return trimmed ? trimmed : undefined
 }
@@ -186,19 +185,19 @@ const isCurrentSeason = (value: unknown): value is CurrentSeason => isItemSeason
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-/** Maat: trimmen; leeg wordt `undefined`. Gooit bij geen tekst of meer dan 20 tekens. */
+/** Size: trimmed; empty becomes `undefined`. Throws on non-text or more than 20 characters. */
 function cleanSize(size: unknown): string | undefined {
   if (size === undefined || size === null) return undefined
-  if (typeof size !== 'string') throw new Error('De maat is ongeldig.')
+  if (typeof size !== 'string') throw new AppError('sizeInvalid')
   const trimmed = size.trim()
   if (!trimmed) return undefined
   if (Array.from(trimmed).length > MAX_SIZE_LENGTH) {
-    throw new Error(`Een maat mag maximaal ${MAX_SIZE_LENGTH} tekens lang zijn.`)
+    throw new AppError('sizeTooLong', { max: MAX_SIZE_LENGTH })
   }
   return trimmed
 }
 
-/** Zet de (al opgeschoonde) maat op een kopie van `base`, of haalt hem weg. */
+/** Sets the (already cleaned) size on a copy of `base`, or removes it. */
 function withSize<T extends object>(base: T, size: string | undefined): T & { size?: string } {
   const result: T & { size?: string } = { ...base }
   delete result.size
@@ -208,39 +207,39 @@ function withSize<T extends object>(base: T, size: string | undefined): T & { si
 
 function cleanChildName(name: unknown): string {
   const trimmed = typeof name === 'string' ? name.trim() : ''
-  if (!trimmed) throw new Error('Geef het kind een naam.')
+  if (!trimmed) throw new AppError('childNameRequired')
   if (Array.from(trimmed).length > MAX_CHILD_NAME_LENGTH) {
-    throw new Error(`De naam van een kind mag maximaal ${MAX_CHILD_NAME_LENGTH} tekens lang zijn.`)
+    throw new AppError('childNameTooLong', { max: MAX_CHILD_NAME_LENGTH })
   }
   return trimmed
 }
 
 function cleanColor(color: unknown): string {
   const trimmed = typeof color === 'string' ? color.trim() : ''
-  if (!COLOR_RE.test(trimmed)) throw new Error('Kies een geldige kleur.')
-  // <input type="color"> vraagt #rrggbb: vouw #rgb uit naar #rrggbb.
+  if (!COLOR_RE.test(trimmed)) throw new AppError('colorInvalid')
+  // <input type="color"> expects #rrggbb: expand #rgb to #rrggbb.
   const hex = trimmed.slice(1).toLowerCase()
   return hex.length === 3 ? `#${Array.from(hex, (c) => c + c).join('')}` : `#${hex}`
 }
 
 /**
- * Maten per categorie: alleen bekende categorieën; per categorie getrimde, niet-lege en unieke
- * (hoofdletterongevoelig) maten. Categorieën zonder maten vallen weg.
+ * Sizes per category: only known categories; per category trimmed, non-empty and unique
+ * (case-insensitive) sizes. Categories without sizes are dropped.
  */
 function cleanChildSizes(value: unknown): ChildSizes {
-  if (!isRecord(value)) throw new Error('De maten zijn ongeldig.')
+  if (!isRecord(value)) throw new AppError('sizesInvalid')
   for (const key of Object.keys(value)) {
-    if (!isCategory(key)) throw new Error('Onbekende soort kledingstuk bij de maten.')
+    if (!isCategory(key)) throw new AppError('sizesUnknownCategory')
   }
   const result: ChildSizes = {}
   for (const category of CATEGORIES) {
     const list = value[category]
     if (list === undefined) continue
-    if (!Array.isArray(list)) throw new Error('De maten zijn ongeldig.')
+    if (!Array.isArray(list)) throw new AppError('sizesInvalid')
     const seen = new Set<string>()
     const sizes: string[] = []
     for (const entry of list as unknown[]) {
-      if (typeof entry !== 'string') throw new Error('De maten zijn ongeldig.')
+      if (typeof entry !== 'string') throw new AppError('sizesInvalid')
       const size = cleanSize(entry)
       if (size === undefined || seen.has(normalizeSize(size))) continue
       seen.add(normalizeSize(size))
@@ -273,7 +272,7 @@ function isStoredPin(value: unknown): value is StoredPin {
   )
 }
 
-/** `soundEnabled`: alleen een echte boolean telt; al het andere (ook ontbreken) wordt de standaard. */
+/** `soundEnabled`: only a real boolean counts; anything else (including missing) becomes the default. */
 function cleanSoundEnabled(value: unknown): boolean {
   return typeof value === 'boolean' ? value : DEFAULT_SETTINGS.soundEnabled
 }
@@ -286,7 +285,7 @@ function normalizeSettings(value: unknown): Settings {
   }
 }
 
-/** Zet `stickersEnabled` op een kopie van `base` als het een echte boolean is; anders (ook ontbreken) blijft het weg = aan. */
+/** Sets `stickersEnabled` on a copy of `base` if it is a real boolean; otherwise (including missing) it stays absent = on. */
 function withStickers<T extends object>(base: T, value: unknown): T & { stickersEnabled?: boolean } {
   const result: T & { stickersEnabled?: boolean } = { ...base }
   delete result.stickersEnabled
@@ -294,7 +293,7 @@ function withStickers<T extends object>(base: T, value: unknown): T & { stickers
   return result
 }
 
-/** Zet de avatar op een kopie van `base` als hij geldig is, of haalt hem weg. */
+/** Sets the avatar on a copy of `base` if it is valid, or removes it. */
 function withAvatar<T extends object>(base: T, avatar: unknown): T & { avatar?: AvatarId } {
   const result: T & { avatar?: AvatarId } = { ...base }
   delete result.avatar
@@ -302,12 +301,12 @@ function withAvatar<T extends object>(base: T, avatar: unknown): T & { avatar?: 
   return result
 }
 
-/** Tijdstip van afronden: alleen een eindig, positief getal (epoch ms) is geldig. */
+/** Completion time: only a finite, positive number (epoch ms) is valid. */
 function isCompletedAt(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
-/** Kopie van een opgeslagen outfit; `completedAt` alleen als hij gezet (en geldig) is. */
+/** Copy of a stored outfit; `completedAt` only if it is set (and valid). */
 function toSavedOutfit(saved: SavedOutfit): SavedOutfit {
   const result: SavedOutfit = { childId: saved.childId, date: saved.date, outfit: normalizeOutfit(saved.outfit) }
   if (isCompletedAt(saved.completedAt)) result.completedAt = saved.completedAt
@@ -323,7 +322,7 @@ function normalizeOutfit(outfit: Outfit): Outfit {
   return result
 }
 
-/** Voert `fn` uit binnen `tx`; bij een fout wordt de transactie afgebroken (niets wordt opgeslagen). */
+/** Runs `fn` inside `tx`; on an error the transaction is aborted (nothing is stored). */
 async function runInTx<S extends Names[], M extends IDBTransactionMode, T>(
   tx: Tx<S, M>,
   fn: () => Promise<T>,
@@ -336,7 +335,7 @@ async function runInTx<S extends Names[], M extends IDBTransactionMode, T>(
     try {
       tx.abort()
     } catch {
-      // Transactie was al klaar of afgebroken.
+      // Transaction was already finished or aborted.
     }
     await tx.done.catch(() => undefined)
     throw error
@@ -344,7 +343,7 @@ async function runInTx<S extends Names[], M extends IDBTransactionMode, T>(
 }
 
 // ---------------------------------------------------------------------------
-// Back-up
+// Backup
 
 interface BackupItem {
   id: string
@@ -358,7 +357,7 @@ interface BackupItem {
   photo: string
 }
 
-/** Back-upformaat. De ouder-PIN zit er bewust niet in. */
+/** Backup format. The parent PIN is deliberately not included. */
 interface BackupFile {
   app: typeof BACKUP_APP
   version: typeof BACKUP_VERSION
@@ -369,34 +368,41 @@ interface BackupFile {
   outfits: SavedOutfit[]
 }
 
-function invalid(detail?: string): Error {
-  return new Error(detail ? `Dit is geen geldig Dress Kid back-upbestand: ${detail}.` : INVALID_BACKUP)
+/** Translated label of the n-th entry (zero-based `index`) in a backup list. */
+function backupLabel(code: 'backupLabelChild' | 'backupLabelItem' | 'backupLabelOutfit', index: number): string {
+  return translateError(new AppError(code, { n: index + 1 }))
 }
 
-/** Voert een validatie uit en zet een fout om in een back-upfout met `detail`. */
-function orInvalid<T>(fn: () => T, detail: string): T {
+/** Backup validation error; the optional detail is a translated `backupDetail*` code. */
+function invalid(detailCode?: ErrorCode, params?: Record<string, string | number>): AppError {
+  if (!detailCode) return new AppError('backupInvalid')
+  return new AppError('backupInvalidDetail', { detail: translateError(new AppError(detailCode, params)) })
+}
+
+/** Runs a validation and turns a failure into a backup error with `detail`. */
+function orInvalid<T>(fn: () => T, detailCode: ErrorCode, params?: Record<string, string | number>): T {
   try {
     return fn()
   } catch {
-    throw invalid(detail)
+    throw invalid(detailCode, params)
   }
 }
 
 function parseChild(value: unknown, index: number): Child {
-  const label = `kind ${index + 1}`
-  if (!isRecord(value)) throw invalid(`${label} is ongeldig`)
+  const label = backupLabel('backupLabelChild', index)
+  if (!isRecord(value)) throw invalid('backupDetailInvalid', { label })
   const { id, name, color, avatar, stickersEnabled, sizes, createdAt } = value
-  if (typeof id !== 'string' || !id) throw invalid(`${label} heeft geen geldige id`)
-  if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) throw invalid(`${label} heeft een ongeldige datum`)
-  // Een onbekende avatar (bijv. uit een nieuwere app-versie) laten we stil vallen.
-  // Oudere back-ups hebben geen `stickersEnabled`; dat (en een ongeldige waarde) wordt stickers aan.
+  if (typeof id !== 'string' || !id) throw invalid('backupDetailNoId', { label })
+  if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) throw invalid('backupDetailBadDate', { label })
+  // An unknown avatar (e.g. from a newer app version) is silently dropped.
+  // Older backups have no `stickersEnabled`; that (and an invalid value) becomes stickers on.
   return withStickers(
     withAvatar<Child>(
       {
         id,
-        name: orInvalid(() => cleanChildName(name), `${label} heeft een ongeldige naam`),
-        color: orInvalid(() => cleanColor(color), `${label} heeft een ongeldige kleur`),
-        sizes: orInvalid(() => cleanChildSizes(sizes ?? {}), `${label} heeft ongeldige maten`),
+        name: orInvalid(() => cleanChildName(name), 'backupDetailBadName', { label }),
+        color: orInvalid(() => cleanColor(color), 'backupDetailBadColor', { label }),
+        sizes: orInvalid(() => cleanChildSizes(sizes ?? {}), 'backupDetailBadSizes', { label }),
         createdAt,
       },
       avatar,
@@ -409,41 +415,41 @@ const DATA_URL_RE = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/\s]*={0,2})$/i
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 function parsePhoto(value: unknown, label: string): StoredPhoto {
-  if (typeof value !== 'string') throw invalid(`${label} heeft geen foto`)
+  if (typeof value !== 'string') throw invalid('backupDetailNoPhoto', { label })
   const match = DATA_URL_RE.exec(value)
   const type = match?.[1]?.toLowerCase()
   const base64 = match?.[2]?.replace(/\s+/g, '')
   if (!type || base64 === undefined || !ALLOWED_IMAGE_TYPES.has(type)) {
-    throw invalid(`${label} heeft een ongeldige foto`)
+    throw invalid('backupDetailBadPhoto', { label })
   }
   if (base64.length * 0.75 > MAX_PHOTO_BYTES + 3) {
-    throw invalid(`${label} heeft een te grote foto (maximaal 10 MB)`)
+    throw invalid('backupDetailPhotoTooLarge', { label })
   }
   let bytes: Uint8Array<ArrayBuffer>
   try {
     bytes = base64ToBytes(base64)
   } catch {
-    throw invalid(`${label} heeft een beschadigde foto`)
+    throw invalid('backupDetailPhotoCorrupt', { label })
   }
-  if (bytes.length === 0) throw invalid(`${label} heeft een lege foto`)
-  if (bytes.length > MAX_PHOTO_BYTES) throw invalid(`${label} heeft een te grote foto (maximaal 10 MB)`)
+  if (bytes.length === 0) throw invalid('backupDetailPhotoEmpty', { label })
+  if (bytes.length > MAX_PHOTO_BYTES) throw invalid('backupDetailPhotoTooLarge', { label })
   return { type, data: bytes.buffer }
 }
 
 function parseItem(value: unknown, index: number): StoredItem {
-  const label = `kledingstuk ${index + 1}`
-  if (!isRecord(value)) throw invalid(`${label} is ongeldig`)
+  const label = backupLabel('backupLabelItem', index)
+  if (!isRecord(value)) throw invalid('backupDetailInvalid', { label })
   const { id, category, name, season, available, excludedIds, size, createdAt, photo } = value
-  if (typeof id !== 'string' || !id) throw invalid(`${label} heeft geen geldige id`)
-  if (!isCategory(category)) throw invalid(`${label} heeft een onbekende soort`)
-  if (!isItemSeason(season)) throw invalid(`${label} heeft een onbekend seizoen`)
-  if (typeof available !== 'boolean') throw invalid(`${label} heeft een ongeldige beschikbaarheid`)
-  if (name !== undefined && name !== null && typeof name !== 'string') throw invalid(`${label} heeft een ongeldige naam`)
+  if (typeof id !== 'string' || !id) throw invalid('backupDetailNoId', { label })
+  if (!isCategory(category)) throw invalid('backupDetailBadCategory', { label })
+  if (!isItemSeason(season)) throw invalid('backupDetailBadSeason', { label })
+  if (typeof available !== 'boolean') throw invalid('backupDetailBadAvailability', { label })
+  if (name !== undefined && name !== null && typeof name !== 'string') throw invalid('backupDetailBadName', { label })
   if (!Array.isArray(excludedIds) || !excludedIds.every((x) => typeof x === 'string')) {
-    throw invalid(`${label} heeft ongeldige uitsluitingen`)
+    throw invalid('backupDetailBadExclusions', { label })
   }
-  if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) throw invalid(`${label} heeft een ongeldige datum`)
-  const cleanedSize = orInvalid(() => cleanSize(size), `${label} heeft een ongeldige maat`)
+  if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) throw invalid('backupDetailBadDate', { label })
+  const cleanedSize = orInvalid(() => cleanSize(size), 'backupDetailBadSize', { label })
   const base: StoredItem = {
     id,
     category,
@@ -463,10 +469,10 @@ function parseOutfits(
   childIds: Set<string>,
 ): SavedOutfit[] {
   if (value === undefined) return []
-  if (!Array.isArray(value)) throw invalid('de outfits zijn ongeldig')
+  if (!Array.isArray(value)) throw invalid('backupDetailOutfitsInvalid')
   const byKey = new Map<string, SavedOutfit>()
   value.forEach((entry: unknown, index) => {
-    const label = `outfit ${index + 1}`
+    const label = backupLabel('backupLabelOutfit', index)
     if (
       !isRecord(entry) ||
       typeof entry.childId !== 'string' ||
@@ -474,19 +480,19 @@ function parseOutfits(
       !DATE_RE.test(entry.date) ||
       !isRecord(entry.outfit)
     ) {
-      throw invalid(`${label} is ongeldig`)
+      throw invalid('backupDetailInvalid', { label })
     }
-    if (!childIds.has(entry.childId)) throw invalid(`${label} hoort bij een onbekend kind`)
+    if (!childIds.has(entry.childId)) throw invalid('backupDetailOutfitUnknownChild', { label })
     const outfit: Outfit = {}
     for (const [category, id] of Object.entries(entry.outfit)) {
-      if (!isCategory(category) || (id !== undefined && typeof id !== 'string')) throw invalid(`${label} is ongeldig`)
-      // Verwijzingen naar onbekende of verkeerd ingedeelde kledingstukken laten we vallen.
+      if (!isCategory(category) || (id !== undefined && typeof id !== 'string')) throw invalid('backupDetailInvalid', { label })
+      // References to unknown or wrongly categorised items are dropped.
       if (id !== undefined && itemsById.get(id)?.category === category) outfit[category] = id
     }
     const saved: SavedOutfit = { childId: entry.childId, date: entry.date, outfit }
-    // Een ongeldig tijdstip van afronden laten we stil vallen (de outfit zelf blijft).
+    // An invalid completion time is silently dropped (the outfit itself stays).
     if (isCompletedAt(entry.completedAt)) saved.completedAt = entry.completedAt
-    // JSON-sleutel, zodat geen enkele combinatie van childId en datum kan botsen.
+    // JSON key, so no combination of childId and date can collide.
     byKey.set(JSON.stringify([entry.childId, entry.date]), saved)
   })
   return [...byKey.values()]
@@ -494,11 +500,11 @@ function parseOutfits(
 
 function parseChildren(value: unknown): Child[] {
   if (value === undefined) return []
-  if (!Array.isArray(value)) throw invalid('de kinderen zijn ongeldig')
+  if (!Array.isArray(value)) throw invalid('backupDetailChildrenInvalid')
   const children = value.map((entry: unknown, index) => parseChild(entry, index))
   const ids = new Set<string>()
   for (const child of children) {
-    if (ids.has(child.id)) throw invalid('er komen dubbele kinderen in voor')
+    if (ids.has(child.id)) throw invalid('backupDetailDuplicateChildren')
     ids.add(child.id)
   }
   return children
@@ -514,28 +520,28 @@ interface ParsedBackup {
 function parseBackup(json: unknown): ParsedBackup {
   if (!isRecord(json) || json.app !== BACKUP_APP) throw invalid()
   if (typeof json.version === 'number' && json.version > BACKUP_VERSION) {
-    throw new Error('Deze back-up is gemaakt met een nieuwere versie van Dress Kid en kan hier niet worden geladen.')
+    throw new AppError('backupNewerVersion')
   }
   if (json.version !== BACKUP_VERSION) throw invalid()
 
   let settings: Settings = { ...DEFAULT_SETTINGS }
   if (json.settings !== undefined) {
     if (!isRecord(json.settings) || !isCurrentSeason(json.settings.currentSeason)) {
-      throw invalid('de instellingen zijn ongeldig')
+      throw invalid('backupDetailSettingsInvalid')
     }
-    // Oudere back-ups hebben geen `soundEnabled`; die (en een ongeldige waarde) wordt `true`.
+    // Older backups have no `soundEnabled`; that (and an invalid value) becomes `true`.
     settings = { currentSeason: json.settings.currentSeason, soundEnabled: cleanSoundEnabled(json.settings.soundEnabled) }
   }
 
-  if (!Array.isArray(json.items)) throw invalid('de kledingstukken ontbreken')
+  if (!Array.isArray(json.items)) throw invalid('backupDetailItemsMissing')
   const items = json.items.map((value: unknown, index) => parseItem(value, index))
   const itemsById = new Map<string, StoredItem>()
   for (const item of items) {
-    if (itemsById.has(item.id)) throw invalid('er komen dubbele kledingstukken in voor')
+    if (itemsById.has(item.id)) throw invalid('backupDetailDuplicateItems')
     itemsById.set(item.id, item)
   }
 
-  // Uitsluitingen: alleen naar bestaande kledingstukken, nooit naar zichzelf, en symmetrisch.
+  // Exclusions: only to existing items, never to themselves, and symmetric.
   const exclusions = new Map<string, Set<string>>(items.map((item) => [item.id, new Set<string>()]))
   for (const item of items) {
     for (const other of item.excludedIds) {
@@ -552,14 +558,14 @@ function parseBackup(json: unknown): ParsedBackup {
 }
 
 // ---------------------------------------------------------------------------
-// De store
+// The store
 
 export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
   let dbPromise: Promise<IDBPDatabase<DressKidDB>> | undefined
   let lastCreatedAt = 0
   /**
-   * Blobs per kledingstuk, zodat opeenvolgende reads dezelfde Blob-instantie teruggeven zolang de
-   * foto niet veranderd is (anders maakt `usePhotoUrl` telkens nieuwe object-URL's).
+   * Blobs per item, so consecutive reads return the same Blob instance as long as the
+   * photo has not changed (otherwise `usePhotoUrl` keeps creating new object URLs).
    */
   const blobCache = new Map<string, { key: string; blob: Blob }>()
 
@@ -580,7 +586,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
       const opening = openDB<DressKidDB>(dbName, DB_VERSION, {
         upgrade(database, oldVersion) {
           if (oldVersion > 0 && oldVersion < 2) {
-            // Geen migratie: oude stores weggooien en schoon opnieuw beginnen.
+            // No migration: drop the old stores and start fresh.
             for (const name of Array.from(database.objectStoreNames)) database.deleteObjectStore(name)
           }
           const names = database.objectStoreNames
@@ -594,7 +600,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
           if (!names.contains('pin')) database.createObjectStore('pin')
         },
         blocking() {
-          // Een nieuwere versie (bijv. in een ander tabblad) wil upgraden: maak ruimte.
+          // A newer version (e.g. in another tab) wants to upgrade: make room.
           void opening.then((database) => database.close())
           dbPromise = undefined
         },
@@ -611,7 +617,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
   }
 
   function nextCreatedAt(): number {
-    // Strikt oplopend, zodat sorteren op createdAt altijd de toevoegvolgorde geeft.
+    // Strictly increasing, so sorting by createdAt always gives the insertion order.
     lastCreatedAt = Math.max(Date.now(), lastCreatedAt + 1)
     return lastCreatedAt
   }
@@ -630,8 +636,8 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
     },
 
     async addItem(input: NewClothingItem) {
-      if (!isCategory(input.category)) throw new Error('Onbekende soort kledingstuk.')
-      if (!isItemSeason(input.season)) throw new Error('Onbekend seizoen.')
+      if (!isCategory(input.category)) throw new AppError('categoryUnknown')
+      if (!isItemSeason(input.season)) throw new AppError('seasonUnknown')
       const size = cleanSize(input.size)
       const photo = await toStoredPhoto(input.photo)
       const stored = withSize(
@@ -655,15 +661,15 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
     },
 
     async updateItem(id, changes) {
-      if (changes.category !== undefined && !isCategory(changes.category)) throw new Error('Onbekende soort kledingstuk.')
-      if (changes.season !== undefined && !isItemSeason(changes.season)) throw new Error('Onbekend seizoen.')
+      if (changes.category !== undefined && !isCategory(changes.category)) throw new AppError('categoryUnknown')
+      if (changes.season !== undefined && !isItemSeason(changes.season)) throw new AppError('seasonUnknown')
       const size = 'size' in changes ? cleanSize(changes.size) : undefined
-      // Foto eerst omzetten: een transactie sluit zichzelf zodra we op iets anders dan IDB wachten.
+      // Convert the photo first: a transaction closes itself as soon as we await anything other than IDB.
       const photo = changes.photo !== undefined ? await toStoredPhoto(changes.photo) : undefined
       const tx = (await db()).transaction('items', 'readwrite')
       return runInTx(tx, async () => {
         const existing = await tx.store.get(id)
-        if (!existing) throw new Error('Dit kledingstuk bestaat niet (meer).')
+        if (!existing) throw new AppError('itemNotFound')
         let updated: StoredItem = { ...existing }
         if (changes.category !== undefined) updated.category = changes.category
         if (changes.season !== undefined) updated.season = changes.season
@@ -710,7 +716,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
       const tx = (await db()).transaction('items', 'readwrite')
       await runInTx(tx, async () => {
         const [a, b] = await Promise.all([tx.store.get(idA), tx.store.get(idB)])
-        if (!a || !b) throw new Error('Een van deze kledingstukken bestaat niet (meer).')
+        if (!a || !b) throw new AppError('itemsNotFound')
         const update = (item: StoredItem, otherId: string): StoredItem => {
           const rest = item.excludedIds.filter((x) => x !== otherId)
           return { ...item, excludedIds: excluded ? [...rest, otherId] : rest }
@@ -724,7 +730,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
     },
 
     async saveSettings(settings) {
-      if (!isCurrentSeason(settings.currentSeason)) throw new Error('Onbekend seizoen.')
+      if (!isCurrentSeason(settings.currentSeason)) throw new AppError('seasonUnknown')
       await (await db()).put(
         'settings',
         { currentSeason: settings.currentSeason, soundEnabled: cleanSoundEnabled(settings.soundEnabled) },
@@ -756,18 +762,18 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
     },
 
     async updateChild(id, changes) {
-      // Eerst valideren, zodat een fout niets half opslaat.
+      // Validate first, so a failure never stores anything halfway.
       const name = changes.name !== undefined ? cleanChildName(changes.name) : undefined
       const color = changes.color !== undefined ? cleanColor(changes.color) : undefined
       const sizes = changes.sizes !== undefined ? cleanChildSizes(changes.sizes) : undefined
-      // `avatar: undefined` (of null) wist de avatar; een onbekende waarde laat de bestaande staan.
+      // `avatar: undefined` (or null) clears the avatar; an unknown value leaves the existing one.
       const avatarValue: unknown = changes.avatar
       const clearAvatar = 'avatar' in changes && (avatarValue === undefined || avatarValue === null)
       const newAvatar = isAvatarId(avatarValue) ? avatarValue : undefined
       const tx = (await db()).transaction('children', 'readwrite')
       const updated = await runInTx(tx, async () => {
         const existing = await tx.store.get(id)
-        if (!existing) throw new Error(CHILD_NOT_FOUND)
+        if (!existing) throw new AppError('childNotFound')
         const next = withStickers(
           withAvatar<Child>(
             {
@@ -807,11 +813,11 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
     async saveOutfit(childId, date, outfit) {
       const tx = (await db()).transaction(['children', 'outfits'], 'readwrite')
       await runInTx(tx, async () => {
-        if (!(await tx.objectStore('children').get(childId))) throw new Error(CHILD_NOT_FOUND)
+        if (!(await tx.objectStore('children').get(childId))) throw new AppError('childNotFound')
         const outfits = tx.objectStore('outfits')
         const existing = await outfits.get([childId, date])
         const next: SavedOutfit = { childId, date, outfit: normalizeOutfit(outfit) }
-        // Een eenmaal verdiende sticker blijft staan, ook als de outfit daarna nog wijzigt.
+        // An earned sticker stays, even if the outfit changes afterwards.
         if (isCompletedAt(existing?.completedAt)) next.completedAt = existing.completedAt
         await outfits.put(next)
       })
@@ -820,7 +826,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
     async markOutfitCompleted(childId, date) {
       const tx = (await db()).transaction(['children', 'outfits'], 'readwrite')
       return runInTx(tx, async () => {
-        if (!(await tx.objectStore('children').get(childId))) throw new Error(CHILD_NOT_FOUND)
+        if (!(await tx.objectStore('children').get(childId))) throw new AppError('childNotFound')
         const outfits = tx.objectStore('outfits')
         const existing = await outfits.get([childId, date])
         if (isCompletedAt(existing?.completedAt)) return false
@@ -849,7 +855,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
         await (await db()).delete('pin', PIN_KEY)
         return
       }
-      if (!isStoredPin(pin)) throw new Error('De PIN is ongeldig.')
+      if (!isStoredPin(pin)) throw new AppError('pinInvalid')
       await (await db()).put('pin', { salt: pin.salt, hash: pin.hash, iterations: pin.iterations }, PIN_KEY)
     },
 
@@ -910,15 +916,15 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
     },
 
     async importBackup(file) {
-      // Alles lezen en controleren vóór de schrijftransactie; bij een fout blijft alles onveranderd.
+      // Read and check everything before the write transaction; on a failure everything stays unchanged.
       if (file.size > MAX_BACKUP_BYTES) {
-        throw new Error('Dit bestand is te groot om een back-up te zijn (meer dan 200 MB).')
+        throw new AppError('backupTooLarge')
       }
       let text: string
       try {
         text = await blobToText(file)
       } catch {
-        throw new Error('Het bestand kon niet worden gelezen.')
+        throw new AppError('fileReadFailed')
       }
       let json: unknown
       try {
@@ -928,7 +934,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
       }
       const parsed = parseBackup(json)
 
-      // De ouder-PIN ('pin'-store) blijft bewust onaangeroerd.
+      // The parent PIN ('pin' store) is deliberately left untouched.
       const tx = (await db()).transaction(['items', 'settings', 'children', 'outfits'], 'readwrite')
       await runInTx(tx, async () => {
         const items = tx.objectStore('items')

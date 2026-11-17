@@ -10,68 +10,68 @@ import type {
 } from '../domain/types';
 
 /**
- * Contract van de opslaglaag (IndexedDB). De UI gebruikt alleen deze interface,
- * zodat later een andere opslag (bijv. sync) kan worden toegevoegd.
+ * Contract of the storage layer (IndexedDB). The UI only uses this interface,
+ * so another storage (e.g. sync) can be added later.
  */
 export interface WardrobeStore {
   listItems(): Promise<ClothingItem[]>;
   getItem(id: string): Promise<ClothingItem | undefined>;
   addItem(input: NewClothingItem): Promise<ClothingItem>;
-  /** Wijzigt velden van een kledingstuk (niet de uitsluitingen). */
+  /** Changes fields of an item (not the exclusions). */
   updateItem(
     id: string,
     changes: Partial<Pick<ClothingItem, 'category' | 'name' | 'season' | 'size' | 'available' | 'photo'>>,
   ): Promise<ClothingItem>;
-  /** Verwijdert het kledingstuk en alle verwijzingen ernaar in uitsluitingen en outfits. */
+  /** Deletes the item and all references to it in exclusions and outfits. */
   deleteItem(id: string): Promise<void>;
-  /** Zet of verwijdert een uitsluiting tussen twee kledingstukken, aan beide kanten. */
+  /** Sets or removes an exclusion between two items, on both sides. */
   setExcluded(idA: string, idB: string, excluded: boolean): Promise<void>;
 
-  /** Instellingen; ontbrekende velden (oude data) krijgen hun standaardwaarde. */
+  /** Settings; missing fields (old data) get their default value. */
   getSettings(): Promise<Settings>;
   /**
-   * Slaat alle instellingen op (vervangt ze). Gooit bij een onbekend seizoen; een ongeldige
-   * `soundEnabled` wordt de standaardwaarde `true`.
+   * Saves all settings (replaces them). Throws on an unknown season; an invalid
+   * `soundEnabled` becomes the default value `true`.
    */
   saveSettings(settings: Settings): Promise<void>;
 
   listChildren(): Promise<Child[]>;
-  /** Voegt een kind toe. Een onbekende `avatar` wordt genegeerd (kind zonder avatar). */
+  /** Adds a child. An unknown `avatar` is ignored (child without avatar). */
   addChild(input: NewChild): Promise<Child>;
   /**
-   * Wijzigt velden van een kind; velden die niet in `changes` staan blijven ongewijzigd.
-   * Avatar: staat de sleutel `avatar` in `changes` met waarde `undefined` (of `null`), dan wordt de
-   * avatar verwijderd; een geldige id zet hem; een onbekende waarde wordt genegeerd (de bestaande
-   * avatar blijft staan).
+   * Changes fields of a child; fields not in `changes` stay unchanged.
+   * Avatar: if the key `avatar` is in `changes` with value `undefined` (or `null`), the
+   * avatar is removed; a valid id sets it; an unknown value is ignored (the existing
+   * avatar stays).
    */
   updateChild(id: string, changes: Partial<NewChild>): Promise<Child>;
-  /** Verwijdert het kind en al zijn opgeslagen outfits. */
+  /** Deletes the child and all of their stored outfits. */
   deleteChild(id: string): Promise<void>;
 
   getOutfit(childId: string, date: string): Promise<SavedOutfit | undefined>;
   /**
-   * Slaat de outfit van die dag op. Een eerder verdiende sticker (`completedAt`) blijft behouden,
-   * ook als het kind de outfit later nog verandert. Gooit als het kind niet (meer) bestaat.
+   * Saves the outfit of that day. A previously earned sticker (`completedAt`) is kept,
+   * even if the child changes the outfit later. Throws if the child does not (or no longer) exist.
    */
   saveOutfit(childId: string, date: string, outfit: Outfit): Promise<void>;
   /**
-   * Stickerboek: markeert de dag als afgerond (het kind tikte op "Klaar"). Zet `completedAt` op nu,
-   * maar alleen als dat nog niet gebeurd was: de eerste tijd blijft staan (idempotent). Bestaat er
-   * voor die dag nog geen outfit, dan wordt er een met een lege outfit aangemaakt. Gooit als het
-   * kind niet (meer) bestaat.
-   * Geeft `true` als `completedAt` nu pas gezet is (een nieuwe sticker), `false` als de dag al afgerond was.
+   * Sticker book: marks the day as completed (the child tapped "Done"). Sets `completedAt` to now,
+   * but only if that had not happened yet: the first time stays (idempotent). If there is
+   * no outfit for that day yet, one is created with an empty outfit. Throws if the
+   * child does not (or no longer) exist.
+   * Returns `true` if `completedAt` was only just set (a new sticker), `false` if the day was already completed.
    */
   markOutfitCompleted(childId: string, date: string): Promise<boolean>;
-  /** Stickerboek: het aantal afgeronde dagen (outfits met `completedAt`) van dit kind; 0 bij een onbekend kind. */
+  /** Sticker book: the number of completed days (outfits with `completedAt`) of this child; 0 for an unknown child. */
   countCompletedDays(childId: string): Promise<number>;
 
-  /** Ouder-PIN; undefined = geen PIN ingesteld. Valt buiten de back-up. */
+  /** Parent PIN; undefined = no PIN set. Not part of the backup. */
   getParentPin(): Promise<StoredPin | undefined>;
-  /** Zet de PIN, of verwijdert hem met null. */
+  /** Sets the PIN, or removes it with null. */
   setParentPin(pin: StoredPin | null): Promise<void>;
 
-  /** Exporteert alles (incl. foto's) als één JSON-bestand. */
+  /** Exports everything (including photos) as a single JSON file. */
   exportBackup(): Promise<Blob>;
-  /** Vervangt alle data door de inhoud van een back-up. Gooit een Error bij een ongeldig bestand. */
+  /** Replaces all data with the contents of a backup. Throws an Error for an invalid file. */
   importBackup(file: Blob): Promise<void>;
 }

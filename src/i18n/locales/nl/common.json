@@ -1,1 +1,31 @@
-{}
+{
+  "categories": {
+    "top": "Shirt",
+    "bottom": "Broek of rok",
+    "dress": "Jurk",
+    "sweater": "Trui of vest",
+    "socks": "Sokken",
+    "shoes": "Schoenen",
+    "jacket": "Jas",
+    "accessory": "Extraatje"
+  },
+  "seasons": {
+    "summer": "Zomer",
+    "winter": "Winter",
+    "all": "Altijd"
+  },
+  "avatars": {
+    "fox": "Vos",
+    "bunny": "Konijn",
+    "bear": "Beer",
+    "cat": "Poes",
+    "dog": "Hond",
+    "panda": "Panda",
+    "frog": "Kikker",
+    "owl": "Uil",
+    "lion": "Leeuw",
+    "unicorn": "Eenhoorn",
+    "dino": "Dino",
+    "penguin": "Pinguïn"
+  }
+}

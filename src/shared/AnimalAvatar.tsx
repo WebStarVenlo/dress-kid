@@ -4,7 +4,7 @@ import type { AvatarId } from '../domain/avatars'
 const INK = '#2B2350'
 const CHEEK = '#FF6FAE'
 
-/** Zachte pastelkleur per dier, voor de cirkel achter het hoofd. */
+/** Soft pastel colour per animal, for the circle behind the head. */
 export const AVATAR_COLORS: Record<AvatarId, string> = {
   fox: '#FFD9BF',
   bunny: '#FFD3E6',
@@ -20,7 +20,7 @@ export const AVATAR_COLORS: Record<AvatarId, string> = {
   penguin: '#D3EBFF',
 }
 
-/** Gezamenlijk gezichtje: ogen, rode wangetjes en een lach. */
+/** Shared little face: eyes, red cheeks and a smile. */
 function Face({
   eyeY = 52,
   eyeDx = 16,
@@ -252,8 +252,8 @@ const ANIMALS: Record<AvatarId, () => ReactNode> = {
 }
 
 /**
- * Vrolijk dierenhoofd als inline SVG (viewBox 0 0 100 100).
- * Standaard decoratief (aria-hidden); met `title` een plaatje met toegankelijke naam.
+ * Cheerful animal head as inline SVG (viewBox 0 0 100 100).
+ * Decorative by default (aria-hidden); with `title` an image with an accessible name.
  */
 export function AnimalAvatar({
   id,

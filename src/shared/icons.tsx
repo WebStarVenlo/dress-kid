@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 export type IconProps = { className?: string; size?: number }
 
-/** Basis voor alle iconen: afgeronde lijnen, 24×24, kleur volgt de tekstkleur. */
+/** Base for all icons: rounded lines, 24×24, colour follows the text colour. */
 function Icon({
   className,
   size = 24,
@@ -179,7 +179,7 @@ export const IconSticker = (p: IconProps) => (
   </Icon>
 )
 
-/** Slotje voor het ouderslot. */
+/** Padlock for the parent lock. */
 export const IconLock = (p: IconProps) => (
   <Icon {...p}>
     <rect x="4.5" y="10.5" width="15" height="10" rx="3" />

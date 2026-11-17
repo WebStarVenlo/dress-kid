@@ -1,15 +1,14 @@
-/** Verkleinen en bijsnijden van foto's voordat ze worden opgeslagen. */
+/** Resizing and cropping photos before they are stored. */
+import { AppError } from '../i18n/AppError'
 import { clampCropRect } from './crop'
 import type { CropRect, PixelRect } from './crop'
 
 export type { CropRect } from './crop'
 
-const DECODE_ERROR = 'Deze foto kan niet worden geopend. Kies een andere foto (bijvoorbeeld JPG of PNG).'
-const EMPTY_CROP_ERROR = 'Het bijsnijkader is leeg. Kies een groter stuk van de foto.'
 
 /**
- * Berekent de afmetingen zodat de langste zijde maximaal `maxSize` is, met behoud van
- * verhouding. Vergroot nooit. Resultaat is afgerond en minimaal 1×1.
+ * Computes the dimensions so the longest side is at most `maxSize`, keeping the
+ * aspect ratio. Never enlarges. The result is rounded and at least 1×1.
  */
 export function fitWithin(width: number, height: number, maxSize: number): { width: number; height: number } {
   if (!(width > 0) || !(height > 0) || !Number.isFinite(width) || !Number.isFinite(height)) {
@@ -49,7 +48,7 @@ function decodeWithImageElement(file: Blob): Promise<Decoded> {
     }
     img.onerror = () => {
       URL.revokeObjectURL(url)
-      reject(new Error(DECODE_ERROR))
+      reject(new AppError('photoDecodeFailed'))
     }
     img.src = url
   })
@@ -60,7 +59,7 @@ async function decode(file: Blob): Promise<Decoded> {
     try {
       return await decodeWithBitmap(file)
     } catch {
-      // Valt terug op <img>, bijv. als imageOrientation niet ondersteund wordt.
+      // Falls back to <img>, e.g. if imageOrientation is not supported.
     }
   }
   return decodeWithImageElement(file)
@@ -69,22 +68,22 @@ async function decode(file: Blob): Promise<Decoded> {
 function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error('De foto kon niet worden verkleind.'))),
+      (blob) => (blob ? resolve(blob) : reject(new AppError('photoResizeFailed'))),
       'image/jpeg',
       quality,
     )
   })
 }
 
-/** Tekent (een deel van) de gedecodeerde foto op wit, verkleind tot `maxSize`, als JPEG. */
+/** Draws (part of) the decoded photo on white, scaled down to `maxSize`, as JPEG. */
 async function renderJpeg(decoded: Decoded, src: PixelRect, maxSize: number, quality: number): Promise<Blob> {
   const size = fitWithin(src.sw, src.sh, maxSize)
   const canvas = document.createElement('canvas')
   canvas.width = size.width
   canvas.height = size.height
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('De foto kon niet worden verkleind.')
-  // JPEG kent geen transparantie: wit in plaats van zwart achter doorzichtige PNG's.
+  if (!ctx) throw new AppError('photoResizeFailed')
+  // JPEG has no transparency: white instead of black behind transparent PNGs.
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, size.width, size.height)
   ctx.imageSmoothingQuality = 'high'
@@ -93,13 +92,13 @@ async function renderJpeg(decoded: Decoded, src: PixelRect, maxSize: number, qua
 }
 
 /**
- * Decodeert een foto (met EXIF-oriëntatie), verkleint zodat de langste zijde maximaal
- * `maxSize` pixels is en exporteert als JPEG.
+ * Decodes a photo (with EXIF orientation), scales it down so the longest side is at most
+ * `maxSize` pixels and exports it as JPEG.
  */
 export async function resizePhoto(file: Blob, maxSize = 800, quality = 0.8): Promise<Blob> {
   const decoded = await decode(file)
   try {
-    if (!(decoded.width > 0) || !(decoded.height > 0)) throw new Error(DECODE_ERROR)
+    if (!(decoded.width > 0) || !(decoded.height > 0)) throw new AppError('photoDecodeFailed')
     return await renderJpeg(decoded, { sx: 0, sy: 0, sw: decoded.width, sh: decoded.height }, maxSize, quality)
   } finally {
     decoded.release()
@@ -107,17 +106,17 @@ export async function resizePhoto(file: Blob, maxSize = 800, quality = 0.8): Pro
 }
 
 /**
- * Snijdt een foto bij tot `rect` (fracties 0..1, of pixels met `unit: 'px'`), verkleint tot
- * `maxSize` en exporteert als JPEG. Het kader wordt binnen de foto gehouden; blijft er niets
- * over, dan volgt een fout.
+ * Crops a photo to `rect` (fractions 0..1, or pixels with `unit: 'px'`), scales it to
+ * `maxSize` and exports it as JPEG. The frame is kept within the photo; if nothing
+ * is left, an error follows.
  */
 export async function cropPhoto(file: Blob, rect: CropRect, maxSize = 800, quality = 0.8): Promise<Blob> {
-  if (!(rect.w > 0) || !(rect.h > 0)) throw new Error(EMPTY_CROP_ERROR)
+  if (!(rect.w > 0) || !(rect.h > 0)) throw new AppError('cropEmpty')
   const decoded = await decode(file)
   try {
-    if (!(decoded.width > 0) || !(decoded.height > 0)) throw new Error(DECODE_ERROR)
+    if (!(decoded.width > 0) || !(decoded.height > 0)) throw new AppError('photoDecodeFailed')
     const src = clampCropRect(rect, decoded.width, decoded.height)
-    if (!src) throw new Error(EMPTY_CROP_ERROR)
+    if (!src) throw new AppError('cropEmpty')
     return await renderJpeg(decoded, src, maxSize, quality)
   } finally {
     decoded.release()

@@ -41,7 +41,7 @@ describe('itemFitsChild', () => {
     expect(itemFitsChild({ category: 'top', size: '110' }, child({}))).toBe(true)
     expect(itemFitsChild({ category: 'top', size: '110' }, child({ top: [] }))).toBe(true)
     expect(itemFitsChild({ category: 'top', size: '110' }, child({ top: ['', '  '] }))).toBe(true)
-    // Maten van een andere categorie tellen niet mee.
+    // Sizes of another category do not count.
     expect(itemFitsChild({ category: 'top', size: '110' }, child({ shoes: ['28'] }))).toBe(true)
   })
 })

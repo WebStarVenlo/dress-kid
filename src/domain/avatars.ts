@@ -1,4 +1,6 @@
-/** Dierfiguren die een ouder per kind kan kiezen als profielplaatje. */
+import { t } from '../i18n'
+
+/** Animal figures a parent can choose per child as profile picture. */
 export const AVATAR_IDS = [
   'fox',
   'bunny',
@@ -16,20 +18,20 @@ export const AVATAR_IDS = [
 
 export type AvatarId = (typeof AVATAR_IDS)[number]
 
-/** Nederlandse namen, alleen voor de ouder (bijv. als toegankelijke naam in de kiezer). */
+/** Translated names, only for the parent (e.g. as accessible name in the picker). Translated at access time. */
 export const AVATAR_LABELS: Record<AvatarId, string> = {
-  fox: 'Vos',
-  bunny: 'Konijn',
-  bear: 'Beer',
-  cat: 'Poes',
-  dog: 'Hond',
-  panda: 'Panda',
-  frog: 'Kikker',
-  owl: 'Uil',
-  lion: 'Leeuw',
-  unicorn: 'Eenhoorn',
-  dino: 'Dino',
-  penguin: 'Pinguïn',
+  get fox() { return t('common:avatars.fox') },
+  get bunny() { return t('common:avatars.bunny') },
+  get bear() { return t('common:avatars.bear') },
+  get cat() { return t('common:avatars.cat') },
+  get dog() { return t('common:avatars.dog') },
+  get panda() { return t('common:avatars.panda') },
+  get frog() { return t('common:avatars.frog') },
+  get owl() { return t('common:avatars.owl') },
+  get lion() { return t('common:avatars.lion') },
+  get unicorn() { return t('common:avatars.unicorn') },
+  get dino() { return t('common:avatars.dino') },
+  get penguin() { return t('common:avatars.penguin') },
 }
 
 export function isAvatarId(value: unknown): value is AvatarId {

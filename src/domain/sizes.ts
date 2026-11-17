@@ -1,15 +1,15 @@
 import type { Child, ClothingItem } from './types';
 
-/** Normaliseert een maat voor vergelijking: trimmen en kleine letters. */
+/** Normalises a size for comparison: trimmed and lower-cased. */
 export function normalizeSize(size: string): string {
   return size.trim().toLowerCase();
 }
 
 /**
- * Past dit kledingstuk bij dit kind?
- * - Stuk zonder maat: past bij iedereen.
- * - Kind zonder maten voor deze categorie: alles in die categorie past.
- * - Anders: de maat van het stuk moet in de maten van het kind voor die categorie staan.
+ * Does this item fit this child?
+ * - Item without a size: fits everyone.
+ * - Child without sizes for this category: everything in that category fits.
+ * - Otherwise: the item's size must be among the child's sizes for that category.
  */
 export function itemFitsChild(item: Pick<ClothingItem, 'category' | 'size'>, child: Pick<Child, 'sizes'>): boolean {
   const size = item.size ? normalizeSize(item.size) : '';

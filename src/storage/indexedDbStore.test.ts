@@ -1,9 +1,15 @@
 import { DEFAULT_SETTINGS, stickersOn } from '../domain/types'
 import type { AvatarId } from '../domain/avatars'
 import type { ClothingItem, NewChild, NewClothingItem, Settings, StoredPin } from '../domain/types'
+import { translateError } from '../i18n/AppError'
 import type { WardrobeStore } from './api'
 import { createIndexedDbStore } from './indexedDbStore'
 import { createIndexedDbStore as reexported, getStore } from './index'
+
+/** Resolves to the translated message of the error the promise rejects with. */
+function failure(promise: Promise<unknown>): Promise<string> {
+  return promise.then(() => '(no error)', translateError)
+}
 
 let dbCounter = 0
 function freshStore(): WardrobeStore {
@@ -95,7 +101,7 @@ describe('createIndexedDbStore: kledingstukken', () => {
       available: false,
       name: 'Nieuw',
       photo: photo([9, 8, 7], 'image/png'),
-      // Pogingen om vaste velden te wijzigen worden genegeerd.
+      // Attempts to change fixed fields are ignored.
       ...({ id: 'hack', excludedIds: [], createdAt: 0 } as object),
     })
     expect(updated).toMatchObject({
@@ -120,7 +126,7 @@ describe('createIndexedDbStore: kledingstukken', () => {
 
   it('updateItem gooit als het kledingstuk niet bestaat', async () => {
     const store = freshStore()
-    await expect(store.updateItem('weg', { name: 'x' })).rejects.toThrow(/bestaat niet/)
+    await expect(failure(store.updateItem('weg', { name: 'x' }))).resolves.toMatch(/bestaat niet/)
   })
 })
 
@@ -148,7 +154,7 @@ describe('createIndexedDbStore: maten van kledingstukken', () => {
     const store = freshStore()
     const ok = await store.addItem(newItem({ size: 'x'.repeat(20) }))
     expect(ok.size).toBe('x'.repeat(20))
-    await expect(store.addItem(newItem({ size: 'x'.repeat(21) }))).rejects.toThrow(
+    await expect(failure(store.addItem(newItem({ size: 'x'.repeat(21) })))).resolves.toMatch(
       'Een maat mag maximaal 20 tekens lang zijn.',
     )
     expect(await store.listItems()).toHaveLength(1)
@@ -158,9 +164,9 @@ describe('createIndexedDbStore: maten van kledingstukken', () => {
     const store = freshStore()
     const a = await store.addItem(newItem({ size: '104', name: 'Shirt' }))
     expect((await store.updateItem(a.id, { size: ' 110 ' })).size).toBe('110')
-    // Andere wijzigingen laten de maat staan.
+    // Other changes leave the size in place.
     expect((await store.updateItem(a.id, { available: false })).size).toBe('110')
-    await expect(store.updateItem(a.id, { size: 'x'.repeat(21) })).rejects.toThrow(/maximaal 20 tekens/)
+    await expect(failure(store.updateItem(a.id, { size: 'x'.repeat(21) }))).resolves.toMatch(/maximaal 20 tekens/)
     expect((await store.getItem(a.id))?.size).toBe('110')
     expect(await store.updateItem(a.id, { size: '' })).not.toHaveProperty('size')
     await store.updateItem(a.id, { size: '98' })
@@ -214,7 +220,7 @@ describe('createIndexedDbStore: kinderen', () => {
 
   it.each(invalidChildren)('addChild weigert %s', async (_label, overrides, message) => {
     const store = freshStore()
-    await expect(store.addChild(newChild(overrides))).rejects.toThrow(message)
+    await expect(failure(store.addChild(newChild(overrides)))).resolves.toMatch(message)
     expect(await store.listChildren()).toEqual([])
   })
 
@@ -228,7 +234,7 @@ describe('createIndexedDbStore: kinderen', () => {
     const a = await store.addChild(newChild({ sizes: { top: ['110'] } }))
     const renamed = await store.updateChild(a.id, {
       name: ' Noortje ',
-      // Pogingen om vaste velden te wijzigen worden genegeerd.
+      // Attempts to change fixed fields are ignored.
       ...({ id: 'hack', createdAt: 0 } as object),
     })
     expect(renamed).toEqual({ ...a, name: 'Noortje' })
@@ -240,13 +246,13 @@ describe('createIndexedDbStore: kinderen', () => {
   it.each(invalidChildren)('updateChild weigert %s en wijzigt niets', async (_label, overrides, message) => {
     const store = freshStore()
     const a = await store.addChild(newChild())
-    await expect(store.updateChild(a.id, overrides)).rejects.toThrow(message)
+    await expect(failure(store.updateChild(a.id, overrides))).resolves.toMatch(message)
     expect(await store.listChildren()).toEqual([a])
   })
 
   it('updateChild gooit als het kind niet bestaat', async () => {
     const store = freshStore()
-    await expect(store.updateChild('weg', { name: 'x' })).rejects.toThrow('Dit kind bestaat niet (meer).')
+    await expect(failure(store.updateChild('weg', { name: 'x' }))).resolves.toMatch('Dit kind bestaat niet (meer).')
   })
 
   it('deleteChild verwijdert het kind en alleen zijn eigen outfits', async () => {
@@ -264,7 +270,7 @@ describe('createIndexedDbStore: kinderen', () => {
     expect(await store.getOutfit(a.id, '2026-01-02')).toBeUndefined()
     expect((await store.getOutfit(b.id, '2026-01-01'))?.outfit).toEqual({ top: 'z' })
     expect((await backupJson(store)).outfits).toEqual([{ childId: b.id, date: '2026-01-01', outfit: { top: 'z' } }])
-    // Onbekend id: niets aan de hand.
+    // Unknown id: nothing happens.
     await store.deleteChild('weg')
     expect(await store.listChildren()).toEqual([b])
   })
@@ -281,7 +287,7 @@ describe('createIndexedDbStore: ouder-PIN', () => {
     expect(await store.getParentPin()).toEqual(other)
     await store.setParentPin(null)
     expect(await store.getParentPin()).toBeUndefined()
-    // Verwijderen zonder PIN mag ook.
+    // Removing without a PIN is also allowed.
     await store.setParentPin(null)
     expect(await store.getParentPin()).toBeUndefined()
   })
@@ -300,7 +306,7 @@ describe('createIndexedDbStore: ouder-PIN', () => {
   it.each(invalidPins)('weigert een ongeldige PIN (%s) en houdt de oude', async (_label, pin) => {
     const store = freshStore()
     await store.setParentPin(PIN)
-    await expect(store.setParentPin(pin as StoredPin)).rejects.toThrow('De PIN is ongeldig.')
+    await expect(failure(store.setParentPin(pin as StoredPin))).resolves.toMatch('De PIN is ongeldig.')
     expect(await store.getParentPin()).toEqual(PIN)
   })
 })
@@ -334,8 +340,8 @@ describe('createIndexedDbStore: uitsluitingen', () => {
   it('gooit als een van beide niet bestaat en wijzigt dan niets', async () => {
     const store = freshStore()
     const a = await store.addItem(newItem())
-    await expect(store.setExcluded(a.id, 'weg', true)).rejects.toThrow(/bestaat niet/)
-    await expect(store.setExcluded('weg', a.id, true)).rejects.toThrow(/bestaat niet/)
+    await expect(failure(store.setExcluded(a.id, 'weg', true))).resolves.toMatch(/bestaat niet/)
+    await expect(failure(store.setExcluded('weg', a.id, true))).resolves.toMatch(/bestaat niet/)
     expect((await store.getItem(a.id))?.excludedIds).toEqual([])
   })
 })
@@ -426,7 +432,7 @@ describe('createIndexedDbStore: instellingen en outfits', () => {
 
   it('weigert een outfit voor een onbekend kind', async () => {
     const store = freshStore()
-    await expect(store.saveOutfit('weg', '2026-03-01', { top: 'x' })).rejects.toThrow('Dit kind bestaat niet (meer).')
+    await expect(failure(store.saveOutfit('weg', '2026-03-01', { top: 'x' }))).resolves.toMatch('Dit kind bestaat niet (meer).')
     expect(await store.getOutfit('weg', '2026-03-01')).toBeUndefined()
   })
 
@@ -518,10 +524,10 @@ describe('createIndexedDbStore: back-up', () => {
       outfit: { top: a.id },
     })
     expect(await target.getOutfit(old.id, '2025-12-31')).toBeUndefined()
-    // De PIN van het doelapparaat blijft staan.
+    // The PIN of the target device stays.
     expect(await target.getParentPin()).toEqual(PIN)
 
-    // Nieuwe items en kinderen na een import komen achteraan.
+    // New items and children after an import go at the end.
     const c = await target.addItem(newItem())
     expect((await target.listItems()).at(-1)?.id).toBe(c.id)
     const k3 = await target.addChild(newChild({ name: 'Nieuw' }))
@@ -699,7 +705,7 @@ describe('createIndexedDbStore: back-up', () => {
     await store.saveSettings({ currentSeason: 'winter', soundEnabled: false })
     await store.saveOutfit(kid.id, '2026-05-05', { top: existing.id })
 
-    await expect(store.importBackup(file)).rejects.toThrow(/geen geldig Dress Kid back-upbestand/)
+    await expect(failure(store.importBackup(file))).resolves.toMatch(/geen geldig Dress Kid back-upbestand/)
 
     const items = await store.listItems()
     expect(items.map((i) => i.name)).toEqual(['Blijft'])
@@ -715,7 +721,7 @@ describe('createIndexedDbStore: back-up', () => {
 
   it('geeft een aparte melding bij een back-up van een nieuwere versie', async () => {
     const store = freshStore()
-    await expect(store.importBackup(jsonBlob(validBackup({ version: 2 })))).rejects.toThrow(/nieuwere versie/)
+    await expect(failure(store.importBackup(jsonBlob(validBackup({ version: 2 }))))).resolves.toMatch(/nieuwere versie/)
   })
 })
 
@@ -729,7 +735,7 @@ describe('createIndexedDbStore: foto-cache', () => {
     expect(second[0]!.photo).toBe(first[0]!.photo)
     expect(second[1]!.photo).toBe(first[1]!.photo)
     expect((await store.getItem(a.id))!.photo).toBe(first[0]!.photo)
-    // Andere wijzigingen houden de Blob vast.
+    // Other changes keep the Blob.
     await store.updateItem(a.id, { name: 'Nieuw', available: false })
     await store.setExcluded(a.id, first[1]!.id, true)
     expect((await store.listItems())[0]!.photo).toBe(first[0]!.photo)
@@ -739,7 +745,7 @@ describe('createIndexedDbStore: foto-cache', () => {
     const store = freshStore()
     const a = await store.addItem(newItem())
     const before = (await store.listItems())[0]!.photo
-    // Zelfde grootte en type: moet toch als nieuwe foto herkend worden.
+    // Same size and type: must still be recognised as a new photo.
     const updated = await store.updateItem(a.id, { photo: photo([9, 9, 9, 9]) })
     const after = (await store.listItems())[0]!.photo
     expect(after).not.toBe(before)
@@ -762,7 +768,7 @@ describe('createIndexedDbStore: foto-cache', () => {
     const imported = (await store.listItems())[0]!
     expect(imported.photo).not.toBe(before)
     expect(await bytesOf(imported.photo)).toEqual([1, 2, 3])
-    // Zelfde id opnieuw importeren met andere foto: nieuwe Blob.
+    // Importing the same id again with a different photo: new Blob.
     await store.importBackup(
       jsonBlob(validBackup({ items: [{ ...(validBackup().items as object[])[0]!, id: 'x', photo: 'data:image/png;base64,BAUG' }] })),
     )
@@ -773,7 +779,7 @@ describe('createIndexedDbStore: foto-cache', () => {
 
   it('werkt met records zonder photoRev', async () => {
     const name = `dress-kid-legacy-${Math.random().toString(36).slice(2)}`
-    // Eerst via de store openen, zodat het schema van de huidige versie bestaat.
+    // Open via the store first, so the schema of the current version exists.
     const store = createIndexedDbStore(name)
     expect(await store.listItems()).toEqual([])
     const { openDB } = await import('idb')
@@ -824,7 +830,7 @@ describe('createIndexedDbStore: database-upgrade', () => {
     expect(await store.listChildren()).toEqual([])
     expect(await store.getParentPin()).toBeUndefined()
 
-    // De nieuwe stores werken.
+    // The new stores work.
     const k = await store.addChild(newChild())
     await store.saveOutfit(k.id, '2026-01-01', { top: 'x' })
     expect((await store.getOutfit(k.id, '2026-01-01'))?.outfit).toEqual({ top: 'x' })
@@ -837,7 +843,7 @@ describe('createIndexedDbStore: import-grenzen', () => {
     const big = new Blob(['{}'])
     Object.defineProperty(big, 'size', { value: 201 * 1024 * 1024 })
     const text = vi.spyOn(big, 'text')
-    await expect(store.importBackup(big)).rejects.toThrow(/te groot/)
+    await expect(failure(store.importBackup(big))).resolves.toMatch(/te groot/)
     expect(text).not.toHaveBeenCalled()
   })
 
@@ -853,7 +859,7 @@ describe('createIndexedDbStore: import-grenzen', () => {
     await store.addItem(newItem({ name: 'Blijft' }))
     const huge = `data:image/png;base64,${'A'.repeat(Math.ceil(((10 * 1024 * 1024 + 10) * 4) / 3 / 4) * 4)}`
     const item = { ...(validBackup().items as object[])[0]!, photo: huge }
-    await expect(store.importBackup(jsonBlob(validBackup({ items: [item] })))).rejects.toThrow(/te grote foto/)
+    await expect(failure(store.importBackup(jsonBlob(validBackup({ items: [item] }))))).resolves.toMatch(/te grote foto/)
     expect((await store.listItems()).map((i) => i.name)).toEqual(['Blijft'])
   })
 
@@ -930,12 +936,12 @@ describe('createIndexedDbStore: avatar van een kind', () => {
     const store = freshStore()
     const a = await store.addChild(newChild())
     expect((await store.updateChild(a.id, { avatar: 'owl' })).avatar).toBe('owl')
-    // Andere wijzigingen laten de avatar staan.
+    // Other changes leave the avatar in place.
     expect((await store.updateChild(a.id, { name: 'Noortje' })).avatar).toBe('owl')
     expect((await store.updateChild(a.id, { avatar: 'dino' })).avatar).toBe('dino')
-    // Een onbekende waarde wordt genegeerd: de bestaande avatar blijft.
+    // An unknown value is ignored: the existing avatar stays.
     expect((await store.updateChild(a.id, { avatar: 'draak' as AvatarId })).avatar).toBe('dino')
-    // `avatar: undefined` (of null) wist hem.
+    // `avatar: undefined` (or null) clears it.
     const cleared = await store.updateChild(a.id, { avatar: undefined })
     expect(cleared).not.toHaveProperty('avatar')
     expect(cleared.name).toBe('Noortje')
@@ -994,9 +1000,9 @@ describe('createIndexedDbStore: geluid en voorlezen', () => {
     await store.saveSettings({ currentSeason: 'winter', soundEnabled: 'nee' as unknown as boolean })
     expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
     await store.saveSettings({ currentSeason: 'winter', soundEnabled: false })
-    await expect(store.saveSettings({ currentSeason: 'lente', soundEnabled: true } as unknown as Settings)).rejects.toThrow(
-      'Onbekend seizoen.',
-    )
+    await expect(
+      failure(store.saveSettings({ currentSeason: 'lente', soundEnabled: true } as unknown as Settings)),
+    ).resolves.toMatch('Onbekend seizoen.')
     expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
   })
 
@@ -1061,7 +1067,7 @@ describe('createIndexedDbStore: stickerboek', () => {
 
   it('markOutfitCompleted weigert een onbekend kind', async () => {
     const store = freshStore()
-    await expect(store.markOutfitCompleted('weg', '2026-04-02')).rejects.toThrow('Dit kind bestaat niet (meer).')
+    await expect(failure(store.markOutfitCompleted('weg', '2026-04-02'))).resolves.toMatch('Dit kind bestaat niet (meer).')
     expect(await store.getOutfit('weg', '2026-04-02')).toBeUndefined()
   })
 
@@ -1079,7 +1085,7 @@ describe('createIndexedDbStore: stickerboek', () => {
       outfit: { dress: 'y' },
       completedAt: 7_000,
     })
-    // Een andere dag krijgt de sticker niet.
+    // Another day does not get the sticker.
     await store.saveOutfit(k.id, '2026-04-04', { top: 'x' })
     expect(await store.getOutfit(k.id, '2026-04-04')).not.toHaveProperty('completedAt')
   })
@@ -1096,7 +1102,7 @@ describe('createIndexedDbStore: stickerboek', () => {
     expect(await store.countCompletedDays(a.id)).toBe(2)
     expect(await store.countCompletedDays(b.id)).toBe(1)
     expect(await store.countCompletedDays('onbekend')).toBe(0)
-    // Kind weg: stickers ook weg.
+    // Child gone: stickers gone too.
     await store.deleteChild(a.id)
     expect(await store.countCompletedDays(a.id)).toBe(0)
     expect(await store.countCompletedDays(b.id)).toBe(1)
