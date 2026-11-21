@@ -137,11 +137,12 @@ export default function BackupPanel({ store, reload }: Props) {
           {t('backup.restore')}
         </button>
       </div>
+      {/* No `accept` filter: iOS greys out .json files when one is set.
+          importBackup validates the contents and reports a wrong file. */}
       <input
         ref={fileRef}
         className="parent-file"
         type="file"
-        accept=".json,application/json"
         aria-label={t('backup.fileAria')}
         tabIndex={-1}
         onChange={pick}
