@@ -1,4 +1,5 @@
-import type { Child, ClothingItem } from './types';
+import { isInSeason } from './compat';
+import type { Child, ClothingItem, CurrentSeason } from './types';
 
 /** Normalises a size for comparison: trimmed and lower-cased. */
 export function normalizeSize(size: string): string {
@@ -69,13 +70,19 @@ export type WardrobeFilter = {
   withoutSize: boolean;
   /** Only show items that fit this child. */
   childId?: string;
+  /** Only show items for this season (items for all year round always match). Undefined or 'all' = every season. */
+  season?: CurrentSeason;
 };
 
 export const EMPTY_WARDROBE_FILTER: WardrobeFilter = { sizes: [], withoutSize: false };
 
+function isSeasonFiltered(filter: WardrobeFilter): boolean {
+  return filter.season !== undefined && filter.season !== 'all';
+}
+
 /** Is any part of the filter set? */
 export function isWardrobeFilterActive(filter: WardrobeFilter): boolean {
-  return filter.sizes.length > 0 || filter.withoutSize || filter.childId !== undefined;
+  return filter.sizes.length > 0 || filter.withoutSize || filter.childId !== undefined || isSeasonFiltered(filter);
 }
 
 /**
@@ -83,10 +90,11 @@ export function isWardrobeFilterActive(filter: WardrobeFilter): boolean {
  * - Size part: passes when no size chips are selected, otherwise when the item has no size
  *   and `withoutSize` is set, or its normalised size is among `filter.sizes`.
  * - Child part: when a child is given, the item must also fit that child.
- * Both parts must pass.
+ * - Season part: 'summer'/'winter' keep items of that season plus all-year items (see isInSeason).
+ * All parts must pass.
  */
 export function matchesWardrobeFilter(
-  item: Pick<ClothingItem, 'category' | 'size'>,
+  item: Pick<ClothingItem, 'category' | 'size' | 'season'>,
   filter: WardrobeFilter,
   child?: Pick<Child, 'sizes'>,
 ): boolean {
@@ -95,11 +103,12 @@ export function matchesWardrobeFilter(
     const sizeOk = size ? filter.sizes.includes(size) : filter.withoutSize;
     if (!sizeOk) return false;
   }
+  if (filter.season !== undefined && !isInSeason(item, filter.season)) return false;
   return child ? itemFitsChild(item, child) : true;
 }
 
 /** Applies the filter to a list of items; an unknown `childId` is ignored. */
-export function filterWardrobe<T extends Pick<ClothingItem, 'size' | 'category'>>(
+export function filterWardrobe<T extends Pick<ClothingItem, 'size' | 'category' | 'season'>>(
   items: T[],
   filter: WardrobeFilter,
   children: Pick<Child, 'id' | 'sizes'>[],

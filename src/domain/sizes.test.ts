@@ -104,51 +104,60 @@ describe('isWardrobeFilterActive', () => {
     expect(isWardrobeFilterActive({ sizes: [], withoutSize: true })).toBe(true)
     expect(isWardrobeFilterActive({ sizes: [], withoutSize: false, childId: 'a' })).toBe(true)
   })
+
+  it('telt een seizoen mee, maar alle seizoenen niet', () => {
+    expect(isWardrobeFilterActive({ sizes: [], withoutSize: false, season: 'summer' })).toBe(true)
+    expect(isWardrobeFilterActive({ sizes: [], withoutSize: false, season: 'winter' })).toBe(true)
+    expect(isWardrobeFilterActive({ sizes: [], withoutSize: false, season: 'all' })).toBe(false)
+    expect(isWardrobeFilterActive({ sizes: [], withoutSize: false, season: undefined })).toBe(false)
+  })
 })
 
 describe('matchesWardrobeFilter', () => {
+  const matches = (item: { category: 'top'; size?: string; season?: 'summer' | 'winter' | 'all' }, f: WardrobeFilter, c?: { sizes: ChildSizes }) =>
+    matchesWardrobeFilter({ season: 'all', ...item }, f, c)
   const filter = (f: Partial<WardrobeFilter>): WardrobeFilter => ({ ...EMPTY_WARDROBE_FILTER, ...f })
 
   it('laat alles door zonder actieve maatfilter', () => {
-    expect(matchesWardrobeFilter({ category: 'top', size: '110' }, EMPTY_WARDROBE_FILTER)).toBe(true)
-    expect(matchesWardrobeFilter({ category: 'top' }, EMPTY_WARDROBE_FILTER)).toBe(true)
+    expect(matches({ category: 'top', size: '110' }, EMPTY_WARDROBE_FILTER)).toBe(true)
+    expect(matches({ category: 'top' }, EMPTY_WARDROBE_FILTER)).toBe(true)
   })
 
   it('matcht op een geselecteerde maat, ook bij andere schrijfwijze', () => {
-    expect(matchesWardrobeFilter({ category: 'top', size: ' XL ' }, filter({ sizes: ['xl'] }))).toBe(true)
-    expect(matchesWardrobeFilter({ category: 'top', size: '116' }, filter({ sizes: ['110'] }))).toBe(false)
+    expect(matches({ category: 'top', size: ' XL ' }, filter({ sizes: ['xl'] }))).toBe(true)
+    expect(matches({ category: 'top', size: '116' }, filter({ sizes: ['110'] }))).toBe(false)
   })
 
   it('combineert meerdere maten met OF', () => {
     const f = filter({ sizes: ['92', '110'] })
-    expect(matchesWardrobeFilter({ category: 'top', size: '92' }, f)).toBe(true)
-    expect(matchesWardrobeFilter({ category: 'top', size: '110' }, f)).toBe(true)
-    expect(matchesWardrobeFilter({ category: 'top', size: '104' }, f)).toBe(false)
+    expect(matches({ category: 'top', size: '92' }, f)).toBe(true)
+    expect(matches({ category: 'top', size: '110' }, f)).toBe(true)
+    expect(matches({ category: 'top', size: '104' }, f)).toBe(false)
   })
 
   it('stukken zonder of met lege maat vallen af tenzij zonder-maat aan staat', () => {
     const f = filter({ sizes: ['92'] })
-    expect(matchesWardrobeFilter({ category: 'top' }, f)).toBe(false)
-    expect(matchesWardrobeFilter({ category: 'top', size: '   ' }, f)).toBe(false)
+    expect(matches({ category: 'top' }, f)).toBe(false)
+    expect(matches({ category: 'top', size: '   ' }, f)).toBe(false)
     const g = filter({ sizes: ['92'], withoutSize: true })
-    expect(matchesWardrobeFilter({ category: 'top' }, g)).toBe(true)
-    expect(matchesWardrobeFilter({ category: 'top', size: '  ' }, g)).toBe(true)
-    expect(matchesWardrobeFilter({ category: 'top', size: '92' }, g)).toBe(true)
-    expect(matchesWardrobeFilter({ category: 'top', size: '98' }, g)).toBe(false)
+    expect(matches({ category: 'top' }, g)).toBe(true)
+    expect(matches({ category: 'top', size: '  ' }, g)).toBe(true)
+    expect(matches({ category: 'top', size: '92' }, g)).toBe(true)
+    expect(matches({ category: 'top', size: '98' }, g)).toBe(false)
   })
 
   it('met alleen zonder-maat blijven alleen stukken zonder maat over', () => {
     const f = filter({ withoutSize: true })
-    expect(matchesWardrobeFilter({ category: 'top' }, f)).toBe(true)
-    expect(matchesWardrobeFilter({ category: 'top', size: '92' }, f)).toBe(false)
+    expect(matches({ category: 'top' }, f)).toBe(true)
+    expect(matches({ category: 'top', size: '92' }, f)).toBe(false)
   })
 
   it('vereist bij een kind ook dat het stuk past (EN)', () => {
     const kid = child({ top: ['110'] })
     const f = filter({ sizes: ['110', '116'] })
-    expect(matchesWardrobeFilter({ category: 'top', size: '110' }, f, kid)).toBe(true)
-    expect(matchesWardrobeFilter({ category: 'top', size: '116' }, f, kid)).toBe(false)
-    expect(matchesWardrobeFilter({ category: 'top', size: '110' }, filter({ sizes: ['92'] }), kid)).toBe(false)
+    expect(matches({ category: 'top', size: '110' }, f, kid)).toBe(true)
+    expect(matches({ category: 'top', size: '116' }, f, kid)).toBe(false)
+    expect(matches({ category: 'top', size: '110' }, filter({ sizes: ['92'] }), kid)).toBe(false)
   })
 })
 
@@ -158,10 +167,10 @@ describe('filterWardrobe', () => {
     { id: 'b', sizes: { top: ['92'] } as ChildSizes },
   ]
   const items = [
-    { id: 1, category: 'top' as const, size: '110' },
-    { id: 2, category: 'top' as const, size: '92' },
-    { id: 3, category: 'top' as const },
-    { id: 4, category: 'top' as const, size: ' XL ' },
+    { id: 1, category: 'top' as const, size: '110', season: 'summer' as const },
+    { id: 2, category: 'top' as const, size: '92', season: 'winter' as const },
+    { id: 3, category: 'top' as const, season: 'all' as const },
+    { id: 4, category: 'top' as const, size: ' XL ', season: 'all' as const },
   ]
   const ids = (list: { id: number }[]) => list.map((i) => i.id)
 
@@ -184,5 +193,25 @@ describe('filterWardrobe', () => {
 
   it('negeert een onbekend kind-id', () => {
     expect(ids(filterWardrobe(items, { sizes: ['92'], withoutSize: false, childId: 'zzz' }, kids))).toEqual([2])
+  })
+
+  it('filtert op zomer inclusief stukken voor het hele jaar', () => {
+    expect(ids(filterWardrobe(items, { sizes: [], withoutSize: false, season: 'summer' }, kids))).toEqual([1, 3, 4])
+  })
+
+  it('filtert op winter inclusief stukken voor het hele jaar', () => {
+    expect(ids(filterWardrobe(items, { sizes: [], withoutSize: false, season: 'winter' }, kids))).toEqual([2, 3, 4])
+  })
+
+  it('toont alles zonder seizoen of bij alle seizoenen', () => {
+    expect(ids(filterWardrobe(items, { sizes: [], withoutSize: false, season: undefined }, kids))).toEqual([1, 2, 3, 4])
+    expect(ids(filterWardrobe(items, { sizes: [], withoutSize: false, season: 'all' }, kids))).toEqual([1, 2, 3, 4])
+  })
+
+  it('combineert seizoen met maat en kind', () => {
+    expect(ids(filterWardrobe(items, { sizes: ['110', '92'], withoutSize: false, season: 'summer' }, kids))).toEqual([1])
+    expect(ids(filterWardrobe(items, { sizes: [], withoutSize: true, season: 'winter' }, kids))).toEqual([3])
+    expect(ids(filterWardrobe(items, { sizes: [], withoutSize: false, childId: 'b', season: 'winter' }, kids))).toEqual([2, 3])
+    expect(ids(filterWardrobe(items, { sizes: [], withoutSize: false, childId: 'a', season: 'winter' }, kids))).toEqual([3])
   })
 })

@@ -62,6 +62,8 @@
     "selectHint": "Tik op kleding om te selecteren.",
     "washFailed": "Dit is niet gelukt. Probeer het nog eens.",
     "filterSize": "Filter op maat",
+    "filterSeason": "Seizoen",
+    "filterAllSeasons": "Alle seizoenen",
     "filterChild": "Past bij kind",
     "filterAll": "Alle",
     "filterNoSize": "Zonder maat",

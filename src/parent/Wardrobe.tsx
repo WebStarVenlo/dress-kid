@@ -43,13 +43,14 @@ export default function Wardrobe({ items, children, filter: rawFilter, onFilterC
     const sizes = rawFilter.sizes.filter((key) => keys.has(key))
     const withoutSize = rawFilter.withoutSize && hasSizeless
     const childId = children.some((c) => c.id === rawFilter.childId) ? rawFilter.childId : undefined
-    return { sizes, withoutSize, childId }
+    return { sizes, withoutSize, childId, season: rawFilter.season }
   }, [rawFilter, sizeOptions, hasSizeless, children])
   // Write the pruned filter back so a size that reappears later is not silently re-selected.
   const stale =
     filter.sizes.length !== rawFilter.sizes.length ||
     filter.withoutSize !== rawFilter.withoutSize ||
     filter.childId !== rawFilter.childId
+  // season never goes stale, so it is not compared
   useEffect(() => {
     if (stale) onFilterChange(filter)
   }, [stale, filter, onFilterChange])
@@ -196,6 +197,27 @@ export default function Wardrobe({ items, children, filter: rawFilter, onFilterC
               </div>
             </div>
           ) : null}
+          <div className="parent-filter-row" role="group" aria-label={t('wardrobe.filterSeason')}>
+            <span className="parent-filter-label" aria-hidden="true">
+              {t('wardrobe.filterSeason')}
+            </span>
+            <div className="parent-filter-chips">
+              {([undefined, 'summer', 'winter'] as const).map((value) => {
+                const on = filter.season === value || (value === undefined && filter.season === 'all')
+                return (
+                  <button
+                    key={value ?? 'all'}
+                    type="button"
+                    className={`parent-filter-chip${on ? ' is-selected' : ''}`}
+                    aria-pressed={on}
+                    onClick={() => updateFilter({ ...filter, season: value })}
+                  >
+                    {value === undefined ? t('wardrobe.filterAllSeasons') : SEASON_LABELS[value]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
           {children.length > 0 ? (
             <div className="parent-filter-row" role="group" aria-label={t('wardrobe.filterChild')}>
               <span className="parent-filter-label" aria-hidden="true">
