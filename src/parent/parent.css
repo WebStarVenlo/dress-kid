@@ -1612,3 +1612,49 @@ body:has(.parent-shell) {
   background: var(--grape);
   border-color: var(--grape);
 }
+
+.parent-filter {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.parent-filter-row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.parent-filter-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.parent-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.parent-shell .parent-filter-chip {
+  --btn-bg: #fff;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 2px var(--parent-field-line);
+  font-size: 0.95rem;
+}
+
+.parent-shell .parent-filter-chip.is-selected {
+  --btn-bg: #f0ebff;
+  box-shadow: inset 0 0 0 2.5px var(--grape);
+  color: var(--grape-edge);
+}
+
+.parent-shell .parent-filter-clear {
+  justify-self: start;
+  min-height: 40px;
+}

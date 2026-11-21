@@ -60,7 +60,16 @@
     "fromWash": "Uit de was ({{count}})",
     "cancelSelect": "Annuleren",
     "selectHint": "Tik op kleding om te selecteren.",
-    "washFailed": "Dit is niet gelukt. Probeer het nog eens."
+    "washFailed": "Dit is niet gelukt. Probeer het nog eens.",
+    "filterSize": "Filter op maat",
+    "filterChild": "Past bij kind",
+    "filterAll": "Alle",
+    "filterNoSize": "Zonder maat",
+    "filterAllChildren": "Alle kinderen",
+    "filterClear": "Filter wissen",
+    "filteredCount": "{{shown}} van {{total}}",
+    "noResultsTitle": "Niets gevonden.",
+    "noResultsHint": "Er is geen kleding die bij dit filter past."
   },
   "itemDetail": {
     "back": "Terug naar de kast",

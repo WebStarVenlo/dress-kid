@@ -248,6 +248,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
     content = (
       <Wardrobe
         items={items}
+        children={children}
         // Only show the 'no child yet' hint once it is certain there really are no children.
         hasChildren={childrenLoading || childrenError !== undefined || children.length > 0}
         onAdd={() => setView({ name: 'add' })}

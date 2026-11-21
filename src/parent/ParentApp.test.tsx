@@ -39,8 +39,8 @@ function renderParent(entry = '/parent') {
   )
 }
 
-async function seed(category: Category, name: string, extra?: { season?: 'summer' | 'winter' | 'all' }) {
-  return store.addItem({ category, name, season: extra?.season ?? 'all', photo: new Blob([name]) })
+async function seed(category: Category, name: string, extra?: { season?: 'summer' | 'winter' | 'all'; size?: string }) {
+  return store.addItem({ category, name, season: extra?.season ?? 'all', size: extra?.size, photo: new Blob([name]) })
 }
 
 async function unlock() {
@@ -248,6 +248,96 @@ describe('kledingkast', () => {
     expect(within(tops).getByText('In de was')).toBeInTheDocument()
     expect(within(screen.getByRole('region', { name: 'Schoenen' })).getByRole('button', { name: /Gympen/ })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Jurk' })).not.toBeInTheDocument()
+  })
+
+  async function seedSizes() {
+    await seed('top', 'Shirt A', { size: '98' })
+    await seed('top', 'Shirt B', { size: '104' })
+    await seed('shoes', 'Schoen C', { size: '110' })
+    await seed('dress', 'Jurk D')
+  }
+  const filterGroup = (name: string) => screen.getByRole('group', { name })
+  const chip = (group: string, name: string) => within(filterGroup(group)).getByRole('button', { name })
+
+  it('filtert op één maat en toont het aantal', async () => {
+    await seedSizes()
+    renderParent()
+    await unlock()
+    fireEvent.click(chip('Filter op maat', '98'))
+    expect(screen.getByRole('button', { name: /Shirt A/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Shirt B/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Schoen C/ })).not.toBeInTheDocument()
+    expect(screen.getByText('1 van 4')).toBeInTheDocument()
+    expect(chip('Filter op maat', '98')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('filtert op meerdere maten en zonder maat', async () => {
+    await seedSizes()
+    renderParent()
+    await unlock()
+    fireEvent.click(chip('Filter op maat', '98'))
+    fireEvent.click(chip('Filter op maat', '110'))
+    expect(screen.getByRole('button', { name: /Shirt A/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Schoen C/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Shirt B/ })).not.toBeInTheDocument()
+    expect(screen.getByText('2 van 4')).toBeInTheDocument()
+    fireEvent.click(chip('Filter op maat', 'Zonder maat'))
+    expect(screen.getByRole('button', { name: /Jurk D/ })).toBeInTheDocument()
+    expect(screen.getByText('3 van 4')).toBeInTheDocument()
+    fireEvent.click(chip('Filter op maat', 'Alle'))
+    expect(screen.getByText('4')).toBeInTheDocument()
+  })
+
+  it('filtert op past bij kind, ook gecombineerd met een maat', async () => {
+    await seedSizes()
+    await store.addChild({ name: 'Mila', color: '#ff8800', sizes: { top: ['98'] } })
+    await store.addChild({ name: 'Sam', color: '#112233', sizes: {} })
+    renderParent()
+    await unlock()
+    fireEvent.click(await screen.findByRole('button', { name: 'Mila' }))
+    expect(screen.getByRole('button', { name: /Shirt A/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Shirt B/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Schoen C/ })).toBeInTheDocument()
+    expect(screen.getByText('3 van 4')).toBeInTheDocument()
+    fireEvent.click(chip('Filter op maat', '110'))
+    expect(screen.queryByRole('button', { name: /Shirt A/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Schoen C/ })).toBeInTheDocument()
+    expect(screen.getByText('1 van 4')).toBeInTheDocument()
+  })
+
+  it('toont niets gevonden en wist het filter', async () => {
+    await seedSizes()
+    await store.addChild({ name: 'Mila', color: '#ff8800', sizes: { top: ['98'] } })
+    renderParent()
+    await unlock()
+    fireEvent.click(chip('Filter op maat', '104'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Mila' }))
+    expect(screen.getByText('Niets gevonden.')).toBeInTheDocument()
+    expect(screen.getByText('0 van 4')).toBeInTheDocument()
+    const notFound = screen.getByText('Niets gevonden.').closest('.parent-empty') as HTMLElement
+    fireEvent.click(within(notFound).getByRole('button', { name: 'Filter wissen' }))
+    expect(screen.queryByText('Niets gevonden.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Shirt B/ })).toBeInTheDocument()
+    expect(screen.getByText('4')).toBeInTheDocument()
+  })
+
+  it('selecteert bij een filter alleen zichtbare kleding', async () => {
+    await seedSizes()
+    renderParent()
+    await unlock()
+    fireEvent.click(screen.getByRole('button', { name: 'Selecteren' }))
+    fireEvent.click(screen.getByRole('button', { name: /Shirt B/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Shirt A/ }))
+    expect(screen.getByText('2 geselecteerd')).toBeInTheDocument()
+    fireEvent.click(chip('Filter op maat', '98'))
+    expect(screen.getByText('1 geselecteerd')).toBeInTheDocument()
+    fireEvent.click(chip('Filter op maat', 'Alle'))
+    expect(screen.getByText('1 geselecteerd')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'In de was (1)' }))
+    await waitFor(async () => {
+      const all = await store.listItems()
+      expect(all.filter((i) => !i.available).map((i) => i.name)).toEqual(['Shirt A'])
+    })
   })
 })
 
