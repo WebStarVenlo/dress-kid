@@ -322,6 +322,53 @@ describe('kledingkast', () => {
     expect(within(titleRow()).getByText('4')).toBeInTheDocument()
   })
 
+  async function seedSeasons() {
+    await seed('top', 'Zomershirt', { season: 'summer', size: '98' })
+    await seed('top', 'Wintertrui', { season: 'winter', size: '98' })
+    await seed('shoes', 'Gympen', { season: 'all', size: '110' })
+  }
+
+  it('filtert op seizoen: zomer toont zomer en altijd, geen winter', async () => {
+    await seedSeasons()
+    renderParent()
+    await unlock()
+    fireEvent.click(chip('Seizoen', 'Zomer'))
+    expect(screen.getByRole('button', { name: /Zomershirt/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Gympen/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Wintertrui/ })).not.toBeInTheDocument()
+    expect(screen.getByText('2 van 3')).toBeInTheDocument()
+    expect(chip('Seizoen', 'Zomer')).toHaveAttribute('aria-pressed', 'true')
+    expect(chip('Seizoen', 'Alle seizoenen')).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('combineert het seizoenfilter met een maat', async () => {
+    await seedSeasons()
+    renderParent()
+    await unlock()
+    fireEvent.click(chip('Seizoen', 'Winter'))
+    expect(screen.getByText('2 van 3')).toBeInTheDocument()
+    fireEvent.click(chip('Filter op maat', '98'))
+    expect(screen.getByRole('button', { name: /Wintertrui/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Zomershirt/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Gympen/ })).not.toBeInTheDocument()
+    expect(screen.getByText('1 van 3')).toBeInTheDocument()
+  })
+
+  it('wist het seizoenfilter met Filter wissen en met Alle seizoenen', async () => {
+    await seedSeasons()
+    renderParent()
+    await unlock()
+    fireEvent.click(chip('Seizoen', 'Zomer'))
+    expect(screen.getByText('2 van 3')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Filter wissen' }))
+    expect(screen.getByRole('button', { name: /Wintertrui/ })).toBeInTheDocument()
+    expect(chip('Seizoen', 'Alle seizoenen')).toHaveAttribute('aria-pressed', 'true')
+    expect(within(titleRow()).getByText('3')).toBeInTheDocument()
+    fireEvent.click(chip('Seizoen', 'Winter'))
+    fireEvent.click(chip('Seizoen', 'Alle seizoenen'))
+    expect(within(titleRow()).getByText('3')).toBeInTheDocument()
+  })
+
   it('houdt het filter vast na het openen van een kledingstuk', async () => {
     await seedSizes()
     renderParent()
