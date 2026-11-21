@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS } from '../domain/types'
 import type { Category, CurrentSeason, Settings } from '../domain/types'
 import { IconSnowflake, IconSparkle, IconSpeaker, IconSun } from '../shared/icons'
+import { resetLaundryRun } from '../shared/hooks'
 import type { WardrobeStore } from '../storage'
 import PinSettings from './PinSettings'
 import { ChoiceGroup, errorMessage } from './shared'
@@ -57,6 +58,8 @@ export default function SettingsPanel({ store, settings, reload }: Props) {
     setSaved(false)
     try {
       await store.saveSettings({ ...settings, ...changes })
+      // The laundry settings may change today's outcome: let the next load run it again.
+      resetLaundryRun(store)
       await reload()
       setSaved(true)
     } catch (e) {

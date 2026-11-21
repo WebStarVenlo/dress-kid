@@ -7,6 +7,40 @@ import type { Category, ClothingItem, SavedOutfit, Settings } from './types'
 
 export const DAY_MS = 86_400_000
 
+const DATE_KEY = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/** Local date as YYYY-MM-DD for a local calendar date (month 0-based, may overflow). */
+function keyOf(year: number, month: number, day: number): string {
+  const date = new Date(year, month, day)
+  const pad = (n: number, width: number) => String(n).padStart(width, '0')
+  return `${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1, 2)}-${pad(date.getDate(), 2)}`
+}
+
+/** `key` (YYYY-MM-DD) plus `days` calendar days; DST-safe. Undefined for an invalid key. */
+export function addDaysToKey(key: string, days: number): string | undefined {
+  const match = DATE_KEY.exec(key)
+  if (!match) return undefined
+  return keyOf(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days)
+}
+
+/**
+ * Whole calendar days from `from` to `to` (both YYYY-MM-DD, local dates); negative when `to`
+ * is earlier. DST-safe because both dates are compared as UTC midnights. NaN for an invalid key.
+ */
+export function daysBetweenKeys(from: string, to: string): number {
+  const a = DATE_KEY.exec(from)
+  const b = DATE_KEY.exec(to)
+  if (!a || !b) return Number.NaN
+  const utc = (m: RegExpExecArray) => Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return Math.round((utc(b) - utc(a)) / DAY_MS)
+}
+
+/** Local date (YYYY-MM-DD) of a moment in epoch ms. */
+export function localDateKey(timestamp: number): string {
+  const date = new Date(timestamp)
+  return keyOf(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
 export type LaundryOutfit = Pick<SavedOutfit, 'childId' | 'date' | 'outfit' | 'laundryProcessed'>
 export type LaundryItem = Pick<ClothingItem, 'id' | 'category' | 'available' | 'washedAt'>
 export type LaundrySettings = Pick<Settings, 'autoWashCategories' | 'autoReturnDays'>
@@ -17,8 +51,8 @@ export interface LaundryInput {
   settings: LaundrySettings
   /** Today's local date (YYYY-MM-DD); outfits of today and later are left alone. */
   today: string
-  /** Current time (epoch ms), for the automatic return. */
-  now: number
+  /** Current time (epoch ms). Kept for callers; the automatic return compares local dates. */
+  now?: number
 }
 
 export interface LaundryPlan {
@@ -40,10 +74,10 @@ export function isTimestamp(value: unknown): value is number {
  * - Every outfit of an earlier day that was not processed yet is processed now (picked
  *   outfits count, completed or not). Its still existing, available items whose category
  *   is in `autoWashCategories` go into the wash.
- * - With `autoReturnDays > 0`, items in the wash with a `washedAt` at least that many days
- *   ago come back. Items without `washedAt` (put away by hand before laundry tracking) never do.
+ * - With `autoReturnDays > 0`, items in the wash whose `washedAt` local date lies at least that many
+ *   calendar days before `today` come back. Items without `washedAt` (put away by hand before laundry tracking) never do.
  */
-export function planLaundry({ outfits, items, settings, today, now }: LaundryInput): LaundryPlan {
+export function planLaundry({ outfits, items, settings, today }: LaundryInput): LaundryPlan {
   const autoWash = new Set<Category>(settings.autoWashCategories)
   const byId = new Map(items.map((item) => [item.id, item]))
   const toWash = new Set<string>()
@@ -64,7 +98,8 @@ export function planLaundry({ outfits, items, settings, today, now }: LaundryInp
   if (days > 0) {
     for (const item of items) {
       if (item.available || toWash.has(item.id) || !isTimestamp(item.washedAt)) continue
-      if (now - item.washedAt >= days * DAY_MS) toReturn.push(item.id)
+      // Local calendar days: washed on the 5th with 3 days means back on the 8th.
+      if (daysBetweenKeys(localDateKey(item.washedAt), today) >= days) toReturn.push(item.id)
     }
   }
 

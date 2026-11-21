@@ -4,6 +4,7 @@ import { Trans, useTranslation } from 'react-i18next'
 import { todayKey } from '../domain/compat'
 import { t as translate } from '../i18n'
 import { IconBackup, IconCheck, IconUndo } from '../shared/icons'
+import { resetLaundryRun } from '../shared/hooks'
 import { getStorageInfo } from '../storage'
 import type { StorageInfo, WardrobeStore } from '../storage'
 import { errorMessage } from './shared'
@@ -105,6 +106,8 @@ export default function BackupPanel({ store, reload }: Props) {
     setError(undefined)
     try {
       await store.importBackup(pending)
+      // Imported outfits and settings may need a laundry run today.
+      resetLaundryRun(store)
       setPending(undefined)
       await reload()
       setMessage(t('backup.restored'))

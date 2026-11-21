@@ -97,6 +97,14 @@ export function ensureLaundryProcessed(store: WardrobeStore, day: string = today
   return run
 }
 
+/**
+ * Forgets that today's laundry run happened, so the next `ensureLaundryProcessed` runs again.
+ * Call after changes that affect the outcome: laundry settings and backup imports.
+ */
+export function resetLaundryRun(store: WardrobeStore): void {
+  laundryRuns.delete(store)
+}
+
 // ---------------------------------------------------------------------------
 // useWardrobe
 

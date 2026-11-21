@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS } from '../domain/types'
 import type { ClothingItem, Settings } from '../domain/types'
 import type { WardrobeStore } from '../storage'
 import { todayKey } from '../domain/compat'
-import { ensureLaundryProcessed, usePhotoUrl, useWardrobe } from './hooks'
+import { ensureLaundryProcessed, resetLaundryRun, usePhotoUrl, useWardrobe } from './hooks'
 
 function makeItem(id: string): ClothingItem {
   return {
@@ -197,6 +197,14 @@ describe('wasronde bij het laden', () => {
     await ensureLaundryProcessed(store, '2026-03-11')
     expect(store.processLaundry).toHaveBeenCalledTimes(2)
     expect(store.processLaundry).toHaveBeenLastCalledWith('2026-03-11')
+  })
+
+  it('resetLaundryRun laat de run van dezelfde dag opnieuw draaien', async () => {
+    const store = fakeStore(() => Promise.resolve([]))
+    await ensureLaundryProcessed(store, '2026-03-10')
+    resetLaundryRun(store)
+    await ensureLaundryProcessed(store, '2026-03-10')
+    expect(store.processLaundry).toHaveBeenCalledTimes(2)
   })
 })
 

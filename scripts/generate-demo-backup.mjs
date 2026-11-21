@@ -284,7 +284,7 @@ const CHILDREN = [
     },
     sizeOf: { socks: '16-18', shoes: '17', accessory: '44-46' },
     defaultSize: '68',
-    wash: { 'Romper met sterren': 6, 'Blauwe joggingbroekje': 30, 'Witte sokjes': 30 },
+    wash: { 'Romper met sterren': 6, 'Blauwe joggingbroekje': 20, 'Witte sokjes': 20 },
     outfits: [
       [1, { top: 'Romper met sterren', bottom: 'Blauwe joggingbroekje', socks: 'Witte sokjes', shoes: 'Blauwe sneakertjes' }],
       [2, { top: 'Gestreept shirt', bottom: 'Spijkerbroekje', socks: 'Blauwe sokjes', sweater: 'Groen vestje' }],

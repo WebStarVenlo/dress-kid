@@ -49,7 +49,10 @@ describe('wasmand', () => {
     await store.updateItem(a.id, { available: true })
     await store.setItemsAvailable([a.id], false)
     const items = await store.listItems()
-    items.find((i) => i.id === a.id)!.washedAt = Date.now() - 3 * 24 * 60 * 60 * 1000 - 1000
+    items.find((i) => i.id === a.id)!.washedAt = (() => {
+      const d = new Date()
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 3, 23, 59).getTime()
+    })()
     expect(washed.available).toBe(false)
     render(<Live initial={items} view="laundry" />)
     expect(screen.getByRole('button', { name: 'Rood shirt, uit de was halen' })).toBeInTheDocument()

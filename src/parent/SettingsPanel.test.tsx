@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '../domain/types'
 import type { Settings } from '../domain/types'
+import { ensureLaundryProcessed } from '../shared/hooks'
 import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 import SettingsPanel from './SettingsPanel'
@@ -245,5 +246,17 @@ describe('was', () => {
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Uit' })).toBeEnabled())
     fireEvent.click(screen.getByRole('radio', { name: 'Uit' }))
     await waitFor(async () => expect((await store.getSettings()).autoReturnDays).toBe(0))
+  })
+
+  it('een wijziging van de wasinstellingen laat de wasronde van vandaag opnieuw draaien', async () => {
+    await renderLive(DEFAULT_SETTINGS)
+    const run = vi.spyOn(store, 'processLaundry')
+    await ensureLaundryProcessed(store)
+    await ensureLaundryProcessed(store)
+    expect(run).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('radio', { name: '3 dagen' }))
+    await waitFor(() => expect(screen.getByRole('radio', { name: '3 dagen' })).toHaveAttribute('aria-checked', 'true'))
+    await ensureLaundryProcessed(store)
+    expect(run).toHaveBeenCalledTimes(2)
   })
 })

@@ -1,10 +1,10 @@
-import { DAY_MS, isTimestamp, normalizeAutoReturnDays, normalizeAutoWashCategories, planLaundry } from './laundry'
+import { addDaysToKey, daysBetweenKeys, isTimestamp, localDateKey, normalizeAutoReturnDays, normalizeAutoWashCategories, planLaundry } from './laundry'
 import type { LaundryInput, LaundryItem } from './laundry'
 import { DEFAULT_SETTINGS } from './types'
 import type { Category, SavedOutfit } from './types'
 
 const TODAY = '2026-03-10'
-const NOW = Date.UTC(2026, 2, 10, 8, 0, 0)
+const NOW = new Date(2026, 2, 10, 8, 0, 0).getTime()
 
 function item(id: string, category: Category, extra: Partial<LaundryItem> = {}): LaundryItem {
   return { id, category, available: true, ...extra }
@@ -111,7 +111,8 @@ describe('planLaundry: in de was', () => {
 })
 
 describe('planLaundry: automatisch terug', () => {
-  const washedDaysAgo = (days: number) => NOW - days * DAY_MS
+  // Local moment on the day `days` before TODAY (default: late evening).
+  const washedDaysAgo = (days: number, hour = 23) => new Date(2026, 2, 10 - days, hour, 59).getTime()
 
   it('doet niets als autoReturnDays 0 is', () => {
     const result = plan({ items: [item('t', 'top', { available: false, washedAt: washedDaysAgo(100) })] })
@@ -121,12 +122,29 @@ describe('planLaundry: automatisch terug', () => {
   it('haalt kleding terug na het ingestelde aantal dagen, precies op de grens', () => {
     const items = [
       item('oud', 'top', { available: false, washedAt: washedDaysAgo(3) }),
-      item('net-niet', 'bottom', { available: false, washedAt: washedDaysAgo(3) + 1 }),
+      item('net-niet', 'bottom', { available: false, washedAt: washedDaysAgo(2, 0) }),
       item('ouder', 'socks', { available: false, washedAt: washedDaysAgo(10) }),
       item('schoon', 'dress', { washedAt: washedDaysAgo(10) }),
     ]
     const result = plan({ items, settings: { autoWashCategories: [], autoReturnDays: 3 } })
     expect(result.toReturn).toEqual(['oud', 'ouder'])
+  })
+
+  it('telt kalenderdagen: gisteravond gewassen en 1 dag ingesteld is vandaag terug, ook al is het minder dan 24 uur', () => {
+    const result = plan({
+      items: [item('t', 'top', { available: false, washedAt: new Date(2026, 2, 9, 23, 30).getTime() })],
+      settings: { autoWashCategories: [], autoReturnDays: 1 },
+      now: new Date(2026, 2, 10, 0, 5).getTime(),
+    })
+    expect(result.toReturn).toEqual(['t'])
+  })
+
+  it('haalt kleding die vandaag in de was ging niet terug', () => {
+    const result = plan({
+      items: [item('t', 'top', { available: false, washedAt: new Date(2026, 2, 10, 0, 1).getTime() })],
+      settings: { autoWashCategories: [], autoReturnDays: 1 },
+    })
+    expect(result.toReturn).toEqual([])
   })
 
   it('haalt kleding zonder washedAt (handmatig weggelegd) nooit terug', () => {
@@ -171,5 +189,26 @@ describe('laundry-hulpfuncties', () => {
     expect(isTimestamp(0)).toBe(false)
     expect(isTimestamp(Number.POSITIVE_INFINITY)).toBe(false)
     expect(isTimestamp('1')).toBe(false)
+  })
+})
+
+describe('datumsleutels', () => {
+  it('addDaysToKey telt kalenderdagen, ook over maand- en jaargrenzen', () => {
+    expect(addDaysToKey('2026-03-10', 3)).toBe('2026-03-13')
+    expect(addDaysToKey('2026-12-30', 3)).toBe('2027-01-02')
+    expect(addDaysToKey('2026-03-29', 1)).toBe('2026-03-30')
+    expect(addDaysToKey('kapot', 1)).toBeUndefined()
+  })
+
+  it('daysBetweenKeys telt hele kalenderdagen, ook over een zomertijdwissel', () => {
+    expect(daysBetweenKeys('2026-03-10', '2026-03-10')).toBe(0)
+    expect(daysBetweenKeys('2026-03-25', '2026-04-01')).toBe(7)
+    expect(daysBetweenKeys('2026-03-12', '2026-03-10')).toBe(-2)
+    expect(daysBetweenKeys('x', '2026-03-10')).toBeNaN()
+  })
+
+  it('localDateKey geeft de lokale datum', () => {
+    expect(localDateKey(new Date(2026, 0, 5, 23, 59).getTime())).toBe('2026-01-05')
+    expect(localDateKey(new Date(2026, 0, 6, 0, 0).getTime())).toBe('2026-01-06')
   })
 })

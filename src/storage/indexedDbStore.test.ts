@@ -1,3 +1,4 @@
+import { todayKey } from '../domain/compat'
 import { DEFAULT_SETTINGS, stickersOn } from '../domain/types'
 import type { AvatarId } from '../domain/avatars'
 import type { Category, ClothingItem, NewChild, NewClothingItem, Settings, StoredPin } from '../domain/types'
@@ -1306,12 +1307,12 @@ describe('createIndexedDbStore: was', () => {
   it('processLaundry haalt kleding automatisch terug na autoReturnDays', async () => {
     const name = `dress-kid-return-${Math.random().toString(36).slice(2)}`
     const store = createIndexedDbStore(name)
-    const now = 100 * DAY
+    const now = new Date(2026, 2, 10, 8, 0).getTime()
     const old = await store.addItem(newItem())
     const recent = await store.addItem(newItem({ category: 'bottom' }))
-    vi.spyOn(Date, 'now').mockReturnValue(now - 3 * DAY)
+    vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 2, 7, 0, 5).getTime())
     await store.setItemsAvailable([old.id], false)
-    vi.spyOn(Date, 'now').mockReturnValue(now - 3 * DAY + 1)
+    vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 2, 8, 23, 55).getTime())
     await store.setItemsAvailable([recent.id], false)
     vi.restoreAllMocks()
     // Put away by hand before laundry tracking existed: no washedAt.
@@ -1336,7 +1337,8 @@ describe('createIndexedDbStore: was', () => {
     expect(back?.available).toBe(true)
     expect(back).not.toHaveProperty('washedAt')
     expect((await store.getItem(recent.id))?.available).toBe(false)
-    expect(await store.processLaundry('2026-03-10', now + 1)).toEqual({ washed: 0, returned: 1 })
+    // Calendar days: washed on the 8th, three days later (the 11th) it comes back.
+    expect(await store.processLaundry('2026-03-11', now + DAY)).toEqual({ washed: 0, returned: 1 })
     expect((await store.getItem(recent.id))?.available).toBe(true)
     expect(await store.processLaundry('2026-03-10', now + 1000 * DAY)).toEqual({ washed: 0, returned: 0 })
     expect((await store.getItem('handmatig'))?.available).toBe(false)
@@ -1412,12 +1414,19 @@ describe('createIndexedDbStore: was', () => {
             { id: 'a', category: 'top', season: 'all', available: true, excludedIds: [], createdAt: 1, photo: PNG_DATA_URL },
             { id: 'b', category: 'bottom', season: 'all', available: false, excludedIds: [], createdAt: 2, photo: PNG_DATA_URL },
           ],
-          outfits: [{ childId: 'k1', date: '2026-01-01', outfit: { top: 'a' } }],
+          outfits: [
+            { childId: 'k1', date: '2026-01-01', outfit: { top: 'a' } },
+            { childId: 'k1', date: todayKey(), outfit: { top: 'a' } },
+            { childId: 'k1', date: '2999-01-01', outfit: { top: 'a' } },
+          ],
         }),
       ),
     )
     expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
     expect((await store.getOutfit('k1', '2026-01-01'))?.laundryProcessed).toBe(true)
+    // Today's and later outfits of an old backup stay unprocessed.
+    expect(await store.getOutfit('k1', todayKey())).not.toHaveProperty('laundryProcessed')
+    expect(await store.getOutfit('k1', '2999-01-01')).not.toHaveProperty('laundryProcessed')
     expect(await store.getItem('b')).not.toHaveProperty('washedAt')
     await store.saveSettings({ ...DEFAULT_SETTINGS, autoReturnDays: 1 })
     expect(await store.processLaundry('2026-03-10')).toEqual({ washed: 0, returned: 0 })
@@ -1484,6 +1493,8 @@ describe('createIndexedDbStore: database-upgrade naar versie 3', () => {
     await raw.put('children', { id: 'k1', name: 'Noor', color: '#ff8800', sizes: {}, createdAt: 1 })
     await raw.put('outfits', { childId: 'k1', date: '2026-01-01', outfit: { top: 'oud' }, completedAt: 3 })
     await raw.put('outfits', { childId: 'k1', date: '2026-01-02', outfit: { top: 'oud' } })
+    await raw.put('outfits', { childId: 'k1', date: todayKey(), outfit: { top: 'oud' } })
+    await raw.put('outfits', { childId: 'k1', date: '2999-01-01', outfit: { top: 'oud' } })
     raw.close()
 
     const store = createIndexedDbStore(name)
@@ -1495,6 +1506,9 @@ describe('createIndexedDbStore: database-upgrade naar versie 3', () => {
       laundryProcessed: true,
     })
     expect((await store.getOutfit('k1', '2026-01-02'))?.laundryProcessed).toBe(true)
+    // Today's and future outfits are not marked.
+    expect(await store.getOutfit('k1', todayKey())).not.toHaveProperty('laundryProcessed')
+    expect(await store.getOutfit('k1', '2999-01-01')).not.toHaveProperty('laundryProcessed')
     expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
     expect(await store.processLaundry('2026-03-10')).toEqual({ washed: 0, returned: 0 })
     expect((await store.getItem('oud'))?.available).toBe(true)

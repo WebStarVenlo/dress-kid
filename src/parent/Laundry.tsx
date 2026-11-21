@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { todayKey } from '../domain/compat'
+import { daysBetweenKeys, localDateKey } from '../domain/laundry'
 import { CATEGORY_LABELS } from '../domain/types'
 import type { ClothingItem } from '../domain/types'
 import { IconWash } from '../shared/icons'
 import { Thumb, itemLabel } from './shared'
-
-const DAY_MS = 24 * 60 * 60 * 1000
 
 interface LaundryProps {
   items: ClothingItem[]
@@ -17,7 +17,7 @@ export default function Laundry({ items, onSetAvailable }: LaundryProps) {
   const { t } = useTranslation('parent')
   const [error, setError] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [now] = useState(() => Date.now())
+  const [today] = useState(() => todayKey())
   const busyRef = useRef(false)
   // The longest in the wash first; items without a date at the end.
   const inWash = items
@@ -42,7 +42,7 @@ export default function Laundry({ items, onSetAvailable }: LaundryProps) {
 
   function since(item: ClothingItem): string | undefined {
     if (item.washedAt === undefined) return undefined
-    const days = Math.max(0, Math.floor((now - item.washedAt) / DAY_MS))
+    const days = Math.max(0, daysBetweenKeys(localDateKey(item.washedAt), today))
     return days === 0 ? t('laundry.sinceToday') : t('laundry.since', { count: days })
   }
 

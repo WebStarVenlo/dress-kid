@@ -9,6 +9,7 @@ import { openDB } from 'idb'
 import type { DBSchema, IDBPDatabase, IDBPObjectStore, IDBPTransaction, StoreNames } from 'idb'
 import { isAvatarId } from '../domain/avatars'
 import type { AvatarId } from '../domain/avatars'
+import { todayKey } from '../domain/compat'
 import { isTimestamp, normalizeAutoReturnDays, normalizeAutoWashCategories, planLaundry } from '../domain/laundry'
 import { normalizeSize } from '../domain/sizes'
 import { CATEGORIES, DEFAULT_SETTINGS } from '../domain/types'
@@ -33,8 +34,8 @@ import type { WardrobeStore } from './api'
 /**
  * Version 2: multiple children, sizes and parent PIN. An upgrade from version 1 drops all
  * stores and recreates them (the app was not in use yet at that point).
- * Version 3: laundry tracking. Existing outfits are marked `laundryProcessed`, so the first
- * laundry run does not put the whole history into the wash.
+ * Version 3: laundry tracking. Existing outfits of earlier days are marked `laundryProcessed`, so
+ * the first laundry run does not put the whole history into the wash.
  */
 const DB_VERSION = 3
 const SETTINGS_KEY = 'settings'
@@ -533,9 +534,12 @@ function parseOutfits(
     const saved: SavedOutfit = { childId: entry.childId, date: entry.date, outfit }
     // An invalid completion time is silently dropped (the outfit itself stays).
     if (isCompletedAt(entry.completedAt)) saved.completedAt = entry.completedAt
-    // Only an explicit `false` (from a newer backup) leaves the day unprocessed. Old backups
-    // have no such field: their days count as processed, so nothing goes into the wash.
-    if (entry.laundryProcessed !== false) saved.laundryProcessed = true
+    // Only an explicit `false` (from a newer backup) leaves the day unprocessed. Without the
+    // field (old backup), earlier days count as processed, so nothing goes into the wash;
+    // today's and later outfits stay unprocessed and are handled normally.
+    if (entry.laundryProcessed === true || (entry.laundryProcessed !== false && entry.date < todayKey())) {
+      saved.laundryProcessed = true
+    }
     // JSON key, so no combination of childId and date can collide.
     byKey.set(JSON.stringify([entry.childId, entry.date]), saved)
   })
@@ -607,10 +611,11 @@ function parseBackup(json: unknown): ParsedBackup {
 
 type UpgradeOutfitStore = IDBPObjectStore<DressKidDB, ArrayLike<Names>, 'outfits', 'versionchange'>
 
-async function markAllOutfitsProcessed(outfits: UpgradeOutfitStore): Promise<void> {
+async function markPastOutfitsProcessed(outfits: UpgradeOutfitStore): Promise<void> {
+  const today = todayKey()
   let cursor = await outfits.openCursor()
   while (cursor) {
-    if (cursor.value.laundryProcessed !== true) await cursor.update({ ...cursor.value, laundryProcessed: true })
+    if (cursor.value.laundryProcessed !== true && cursor.value.date < today) await cursor.update({ ...cursor.value, laundryProcessed: true })
     cursor = await cursor.continue()
   }
 }
@@ -659,7 +664,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
           if (oldVersion === 2) {
             // Laundry tracking: the days so far count as processed. A failure aborts the
             // upgrade (and so the opening); nothing is changed halfway.
-            void markAllOutfitsProcessed(transaction.objectStore('outfits')).catch((error: unknown) => {
+            void markPastOutfitsProcessed(transaction.objectStore('outfits')).catch((error: unknown) => {
               console.error(error)
               try {
                 transaction.abort()
