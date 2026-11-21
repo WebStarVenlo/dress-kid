@@ -5,6 +5,7 @@ import type { ClothingItem } from '../domain/types'
 import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 import Laundry from './Laundry'
+import { EMPTY_WARDROBE_FILTER } from '../domain/sizes'
 import Wardrobe from './Wardrobe'
 
 let dbCounter = 0
@@ -20,7 +21,7 @@ function Live({ initial, view }: { initial: ClothingItem[]; view: 'laundry' | 'w
   return view === 'laundry' ? (
     <Laundry items={items} onSetAvailable={setAvailable} />
   ) : (
-    <Wardrobe items={items} hasChildren onAdd={() => undefined} onOpen={() => undefined} onOpenChildren={() => undefined} onSetAvailable={setAvailable} />
+    <Wardrobe items={items} children={[]} filter={EMPTY_WARDROBE_FILTER} onFilterChange={() => undefined} hasChildren onAdd={() => undefined} onOpen={() => undefined} onOpenChildren={() => undefined} onSetAvailable={setAvailable} />
   )
 }
 
@@ -97,7 +98,7 @@ describe('kast: selecteren', () => {
     const onOpen = vi.fn()
     const items = await store.listItems()
     render(
-      <Wardrobe items={items} hasChildren onAdd={() => undefined} onOpen={onOpen} onOpenChildren={() => undefined} onSetAvailable={async () => undefined} />,
+      <Wardrobe items={items} children={[]} filter={EMPTY_WARDROBE_FILTER} onFilterChange={() => undefined} hasChildren onAdd={() => undefined} onOpen={onOpen} onOpenChildren={() => undefined} onSetAvailable={async () => undefined} />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Rood shirt, bekijk of wijzig' }))
     expect(onOpen).toHaveBeenCalledWith(items[0]!.id)

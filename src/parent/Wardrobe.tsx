@@ -1,12 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
-import type { ClothingItem } from '../domain/types'
+import type { Child, ClothingItem } from '../domain/types'
+import {
+  EMPTY_WARDROBE_FILTER,
+  distinctSizes,
+  filterWardrobe,
+  isWardrobeFilterActive,
+  normalizeSize,
+} from '../domain/sizes'
+import type { WardrobeFilter } from '../domain/sizes'
 import { IconCamera, IconCheck, IconChildren, IconWash } from '../shared/icons'
 import { Thumb, itemLabel } from './shared'
 
 interface WardrobeProps {
   items: ClothingItem[]
+  children: Child[]
+  /** Filter state lives in the parent so it survives opening an item. */
+  filter: WardrobeFilter
+  onFilterChange: (filter: WardrobeFilter) => void
   /** False when it is certain no child has been created yet (not while loading or after a load error). */
   hasChildren: boolean
   onAdd: () => void
@@ -16,14 +28,50 @@ interface WardrobeProps {
   onSetAvailable: (ids: string[], available: boolean) => Promise<void>
 }
 
-export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChildren, onSetAvailable }: WardrobeProps) {
+export default function Wardrobe({ items, children, filter: rawFilter, onFilterChange, hasChildren, onAdd, onOpen, onOpenChildren, onSetAvailable }: WardrobeProps) {
   const { t } = useTranslation('parent')
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
-  // Items that disappeared in the meantime (e.g. deleted) no longer count.
-  const chosen = items.filter((item) => selected.has(item.id))
+
+  const sizeOptions = useMemo(() => distinctSizes(items), [items])
+  const hasSizeless = items.some((item) => !item.size?.trim())
+  // Drop filter parts that no longer exist (item edited or deleted, child removed).
+  const filter = useMemo<WardrobeFilter>(() => {
+    const keys = new Set(sizeOptions.map(normalizeSize))
+    const sizes = rawFilter.sizes.filter((key) => keys.has(key))
+    const withoutSize = rawFilter.withoutSize && hasSizeless
+    const childId = children.some((c) => c.id === rawFilter.childId) ? rawFilter.childId : undefined
+    return { sizes, withoutSize, childId }
+  }, [rawFilter, sizeOptions, hasSizeless, children])
+  // Write the pruned filter back so a size that reappears later is not silently re-selected.
+  const stale =
+    filter.sizes.length !== rawFilter.sizes.length ||
+    filter.withoutSize !== rawFilter.withoutSize ||
+    filter.childId !== rawFilter.childId
+  useEffect(() => {
+    if (stale) onFilterChange(filter)
+  }, [stale, filter, onFilterChange])
+  const filterActive = isWardrobeFilterActive(filter)
+  const visible = useMemo(() => filterWardrobe(items, filter, children), [items, filter, children])
+  // Only visible items can be chosen; items that disappeared (e.g. deleted) no longer count.
+  const chosen = visible.filter((item) => selected.has(item.id))
+
+  function updateFilter(next: WardrobeFilter) {
+    onFilterChange(next)
+    const stillVisible = new Set(filterWardrobe(items, next, children).map((item) => item.id))
+    setSelected((prev) => new Set([...prev].filter((id) => stillVisible.has(id))))
+  }
+
+  function toggleSize(key: string) {
+    const sizes = filter.sizes.includes(key) ? filter.sizes.filter((k) => k !== key) : [...filter.sizes, key]
+    updateFilter({ ...filter, sizes })
+  }
+
+  function clearFilter() {
+    updateFilter(EMPTY_WARDROBE_FILTER)
+  }
 
   function stopSelecting() {
     setSelecting(false)
@@ -59,9 +107,9 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
       <div className="parent-title-row">
         <h2 id="parent-wardrobe-title">{t('wardrobe.title')}</h2>
         <span className="parent-count">
-          {items.length}
+          {filterActive ? t('wardrobe.filteredCount', { shown: visible.length, total: items.length }) : items.length}
         </span>
-        {items.length > 0 && !selecting ? (
+        {visible.length > 0 && !selecting ? (
           <button type="button" className="parent-select-toggle" onClick={() => setSelecting(true)}>
             {t('wardrobe.select')}
           </button>
@@ -104,6 +152,85 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
           </button>
         </div>
       )}
+      {items.length > 0 ? (
+        <div className="parent-card parent-filter">
+          {sizeOptions.length > 0 ? (
+            <div className="parent-filter-row" role="group" aria-label={t('wardrobe.filterSize')}>
+              <span className="parent-filter-label" aria-hidden="true">
+                {t('wardrobe.filterSize')}
+              </span>
+              <div className="parent-filter-chips">
+                <button
+                  type="button"
+                  className={`parent-filter-chip${filter.sizes.length === 0 && !filter.withoutSize ? ' is-selected' : ''}`}
+                  aria-pressed={filter.sizes.length === 0 && !filter.withoutSize}
+                  onClick={() => updateFilter({ ...filter, sizes: [], withoutSize: false })}
+                >
+                  {t('wardrobe.filterAll')}
+                </button>
+                {sizeOptions.map((size) => {
+                  const key = normalizeSize(size)
+                  const on = filter.sizes.includes(key)
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`parent-filter-chip${on ? ' is-selected' : ''}`}
+                      aria-pressed={on}
+                      onClick={() => toggleSize(key)}
+                    >
+                      {size}
+                    </button>
+                  )
+                })}
+                {hasSizeless ? (
+                  <button
+                    type="button"
+                    className={`parent-filter-chip${filter.withoutSize ? ' is-selected' : ''}`}
+                    aria-pressed={filter.withoutSize}
+                    onClick={() => updateFilter({ ...filter, withoutSize: !filter.withoutSize })}
+                  >
+                    {t('wardrobe.filterNoSize')}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {children.length > 0 ? (
+            <div className="parent-filter-row" role="group" aria-label={t('wardrobe.filterChild')}>
+              <span className="parent-filter-label" aria-hidden="true">
+                {t('wardrobe.filterChild')}
+              </span>
+              <div className="parent-filter-chips">
+                <button
+                  type="button"
+                  className={`parent-filter-chip${filter.childId === undefined ? ' is-selected' : ''}`}
+                  aria-pressed={filter.childId === undefined}
+                  onClick={() => updateFilter({ ...filter, childId: undefined })}
+                >
+                  {t('wardrobe.filterAllChildren')}
+                </button>
+                {children.map((child) => (
+                  <button
+                    key={child.id}
+                    type="button"
+                    className={`parent-filter-chip${filter.childId === child.id ? ' is-selected' : ''}`}
+                    aria-pressed={filter.childId === child.id}
+                    onClick={() => updateFilter({ ...filter, childId: child.id })}
+                  >
+                    {child.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {filterActive ? (
+            <button type="button" className="parent-filter-clear" onClick={clearFilter}>
+              {t('wardrobe.filterClear')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {items.length === 0 ? (
         <div className="parent-card parent-empty">
           <span className="parent-empty-icon" aria-hidden="true">
@@ -116,9 +243,19 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
             <Trans t={t} i18nKey="wardrobe.emptyHint" components={{ em: <em /> }} />
           </p>
         </div>
+      ) : visible.length === 0 ? (
+        <div className="parent-card parent-empty">
+          <p role="status">
+            <strong>{t('wardrobe.noResultsTitle')}</strong>
+          </p>
+          <p>{t('wardrobe.noResultsHint')}</p>
+          <button type="button" onClick={clearFilter}>
+            {t('wardrobe.filterClear')}
+          </button>
+        </div>
       ) : (
         CATEGORIES.map((category) => {
-          const inCategory = items.filter((item) => item.category === category)
+          const inCategory = visible.filter((item) => item.category === category)
           if (inCategory.length === 0) return null
           return (
             <section key={category} className="parent-shelf" aria-label={CATEGORY_LABELS[category]}>
