@@ -536,7 +536,9 @@ describe('KidApp', () => {
       vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
       vi.setSystemTime(new Date(2026, 5, 10, 22, 0, 0))
       const store = await newStore()
-    const sam = await childId(store, 'Sam')
+      // These tests are about the day rollover; keep yesterday's clothes out of the automatic wash.
+      await store.saveSettings({ ...DEFAULT_SETTINGS, autoWashCategories: [] })
+      const sam = await childId(store, 'Sam')
       const top = await add(store, 'top', 'Gele trui')
       const bottom = await add(store, 'bottom', 'Broek')
       await store.saveOutfit(sam, '2026-06-10', { top: top.id, bottom: bottom.id })
@@ -589,6 +591,19 @@ describe('KidApp', () => {
         vi.advanceTimersByTime(60_000)
       })
       await expectFreshDay(store, sam)
+    })
+
+    it('stopt gisteren gedragen kleding bij de dagwisseling in de was', async () => {
+      const { store } = await setup()
+      await store.saveSettings({ ...DEFAULT_SETTINGS })
+      vi.setSystemTime(new Date(2026, 5, 11, 7, 0, 0))
+      act(() => {
+        window.dispatchEvent(new Event('focus'))
+      })
+      await waitFor(async () => {
+        const items = await store.listItems()
+        expect(items.find((item) => item.name === 'Gele trui')?.available).toBe(false)
+      })
     })
 
     it('verandert niets zolang het dezelfde dag is', async () => {

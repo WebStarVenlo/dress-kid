@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { SHARED_FLAG, takeShared } from '../domain/sharedPhotos'
 import { useChildren, useWardrobe } from '../shared/hooks'
-import { IconArrowRight, IconBackup, IconChildren, IconSettings, IconWardrobe } from '../shared/icons'
+import { IconArrowRight, IconBackup, IconChildren, IconSettings, IconWardrobe, IconWash } from '../shared/icons'
 import { getStore, requestPersistentStorage } from '../storage'
 import type { WardrobeStore } from '../storage'
 import AddFlow from './AddFlow'
@@ -12,6 +12,7 @@ import ChildrenPanel from './ChildrenPanel'
 import Gate, { randomSum } from './Gate'
 import type { Sum } from './Gate'
 import ItemDetail from './ItemDetail'
+import Laundry from './Laundry'
 import SettingsPanel from './SettingsPanel'
 import Wardrobe from './Wardrobe'
 import { isUnlocked, lock, touchUnlock } from './unlock'
@@ -84,7 +85,7 @@ type View =
   | { name: 'wardrobe' }
   /** files/url: shared via "Share → Dress Kid"; shareId makes it a fresh add screen. */
   | { name: 'add'; files?: File[]; url?: string; shareId?: number }
-  | { name: 'item'; id: string } | { name: 'settings' } | { name: 'backup' } | { name: 'children' }
+  | { name: 'item'; id: string } | { name: 'laundry' } | { name: 'settings' } | { name: 'backup' } | { name: 'children' }
 
 export default function ParentApp({ store, makeSum = randomSum }: ParentAppProps) {
   const [unlocked, setUnlocked] = useState(() => isUnlocked())
@@ -152,6 +153,7 @@ function useSharedPhotos(setView: (view: View) => void) {
 
 const TABS = [
   { name: 'wardrobe', label: 'app.tabs.wardrobe', Icon: IconWardrobe },
+  { name: 'laundry', label: 'app.tabs.laundry', Icon: IconWash },
   { name: 'children', label: 'app.tabs.children', Icon: IconChildren },
   { name: 'settings', label: 'app.tabs.settings', Icon: IconSettings },
   { name: 'backup', label: 'app.tabs.backup', Icon: IconBackup },
@@ -170,8 +172,14 @@ function ParentMain({ store }: { store: WardrobeStore }) {
   }, [])
 
   const open = view.name === 'item' ? items.find((item) => item.id === view.id) : undefined
-  const tab = view.name === 'settings' || view.name === 'backup' || view.name === 'children' ? view.name : 'wardrobe'
+  const tab = view.name === 'settings' || view.name === 'backup' || view.name === 'children' || view.name === 'laundry'
+      ? view.name : 'wardrobe'
   const goHome = () => setView({ name: 'wardrobe' })
+  const washCount = items.filter((item) => !item.available).length
+  const setAvailable = async (ids: string[], available: boolean) => {
+    await store.setItemsAvailable(ids, available)
+    await reload()
+  }
 
   let content
   if (loading) {
@@ -222,6 +230,8 @@ function ParentMain({ store }: { store: WardrobeStore }) {
         </button>
       </div>
     )
+  } else if (view.name === 'laundry') {
+    content = <Laundry items={items} onSetAvailable={setAvailable} />
   } else if (view.name === 'settings') {
     content = <SettingsPanel store={store} settings={settings} reload={reload} />
   } else if (view.name === 'children') {
@@ -243,6 +253,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
         onAdd={() => setView({ name: 'add' })}
         onOpen={(id) => setView({ name: 'item', id })}
         onOpenChildren={() => setView({ name: 'children' })}
+        onSetAvailable={setAvailable}
       />
     )
   }
@@ -285,6 +296,11 @@ function ParentMain({ store }: { store: WardrobeStore }) {
           >
             <span className="parent-tab-icon">
               <Icon size={22} />
+              {name === 'laundry' && washCount > 0 ? (
+                <span className="parent-tab-badge" aria-hidden="true">
+                  {washCount}
+                </span>
+              ) : null}
             </span>
             <span className="parent-tab-label">{t(label)}</span>
           </button>

@@ -207,3 +207,43 @@ it('meldt het als de pincode-instelling niet kan worden geladen', async () => {
   render(<SettingsPanel store={broken} settings={settings} reload={async () => undefined} />)
   expect(await screen.findByRole('alert')).toHaveTextContent('kon niet worden geladen')
 })
+
+describe('was', () => {
+  async function renderLive(initial: Settings) {
+    await store.saveSettings(initial)
+    const loaded = await store.getSettings()
+    function Panel() {
+      const [settings, setSettings] = useState(loaded)
+      return <SettingsPanel store={store} settings={settings} reload={async () => setSettings(await store.getSettings())} />
+    }
+    render(<Panel />)
+  }
+
+  it('toont de standaardcategorieën als aan', async () => {
+    await renderLive(DEFAULT_SETTINGS)
+    expect(screen.getByRole('button', { name: /Shirt/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /Schoenen/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('radio', { name: 'Uit' })).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('zet een categorie aan en uit en bewaart dat', async () => {
+    await renderLive(DEFAULT_SETTINGS)
+    fireEvent.click(screen.getByRole('button', { name: /Schoenen/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Schoenen/ })).toHaveAttribute('aria-pressed', 'true'))
+    expect((await store.getSettings()).autoWashCategories).toEqual(['top', 'bottom', 'dress', 'socks', 'shoes'])
+    await waitFor(() => expect(screen.getByRole('button', { name: /Shirt/ })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: /Shirt/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Shirt/ })).toHaveAttribute('aria-pressed', 'false'))
+    expect((await store.getSettings()).autoWashCategories).toEqual(['bottom', 'dress', 'socks', 'shoes'])
+  })
+
+  it('bewaart het aantal dagen voor automatisch terugkomen', async () => {
+    await renderLive(DEFAULT_SETTINGS)
+    fireEvent.click(screen.getByRole('radio', { name: '3 dagen' }))
+    await waitFor(() => expect(screen.getByRole('radio', { name: '3 dagen' })).toHaveAttribute('aria-checked', 'true'))
+    expect((await store.getSettings()).autoReturnDays).toBe(3)
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Uit' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('radio', { name: 'Uit' }))
+    await waitFor(async () => expect((await store.getSettings()).autoReturnDays).toBe(0))
+  })
+})

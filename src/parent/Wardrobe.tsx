@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
 import type { ClothingItem } from '../domain/types'
-import { IconCamera, IconChildren, IconWash } from '../shared/icons'
+import { IconCamera, IconCheck, IconChildren, IconWash } from '../shared/icons'
 import { Thumb, itemLabel } from './shared'
 
 interface WardrobeProps {
@@ -11,10 +12,48 @@ interface WardrobeProps {
   onAdd: () => void
   onOpen: (id: string) => void
   onOpenChildren: () => void
+  /** Puts items in or out of the wash in bulk and reloads; rejects on failure. */
+  onSetAvailable: (ids: string[], available: boolean) => Promise<void>
 }
 
-export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChildren }: WardrobeProps) {
+export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChildren, onSetAvailable }: WardrobeProps) {
   const { t } = useTranslation('parent')
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  // Items that disappeared in the meantime (e.g. deleted) no longer count.
+  const chosen = items.filter((item) => selected.has(item.id))
+
+  function stopSelecting() {
+    setSelecting(false)
+    setSelected(new Set())
+    setFailed(false)
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }
+
+  async function apply(available: boolean) {
+    if (busy || chosen.length === 0) return
+    setBusy(true)
+    setFailed(false)
+    try {
+      await onSetAvailable(chosen.map((item) => item.id), available)
+      stopSelecting()
+    } catch (e) {
+      console.error(e)
+      setFailed(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <section aria-labelledby="parent-wardrobe-title" className="parent-wardrobe">
       <div className="parent-title-row">
@@ -22,7 +61,36 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
         <span className="parent-count">
           {items.length}
         </span>
+        {items.length > 0 && !selecting ? (
+          <button type="button" className="parent-select-toggle" onClick={() => setSelecting(true)}>
+            {t('wardrobe.select')}
+          </button>
+        ) : null}
       </div>
+      {selecting ? (
+        <div className="parent-card parent-selectbar" role="group" aria-label={t('wardrobe.selectedCount', { count: chosen.length })}>
+          <p className="parent-hint" role="status">
+            {chosen.length === 0 ? t('wardrobe.selectHint') : t('wardrobe.selectedCount', { count: chosen.length })}
+          </p>
+          <div className="parent-selectbar-actions">
+            <button type="button" disabled={busy || chosen.length === 0} onClick={() => void apply(false)}>
+              <IconWash size={18} />
+              {t('wardrobe.toWash', { count: chosen.length })}
+            </button>
+            <button type="button" disabled={busy || chosen.length === 0} onClick={() => void apply(true)}>
+              {t('wardrobe.fromWash', { count: chosen.length })}
+            </button>
+            <button type="button" disabled={busy} onClick={stopSelecting}>
+              {t('wardrobe.cancelSelect')}
+            </button>
+          </div>
+          {failed ? (
+            <p role="alert" className="parent-error">
+              {t('wardrobe.washFailed')}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {hasChildren ? null : (
         <div className="parent-card parent-notice">
           <span className="parent-notice-icon" aria-hidden="true">
@@ -66,11 +134,17 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
                   <li key={item.id}>
                     <button
                       type="button"
-                      className={`parent-tile${item.available ? '' : ' is-away'}`}
-                      onClick={() => onOpen(item.id)}
-                      aria-label={t('wardrobe.tileLabel', { label: itemLabel(item) })}
+                      className={`parent-tile${item.available ? '' : ' is-away'}${selecting && selected.has(item.id) ? ' is-selected' : ''}`}
+                      onClick={() => (selecting ? toggle(item.id) : onOpen(item.id))}
+                      aria-label={t(selecting ? 'wardrobe.selectLabel' : 'wardrobe.tileLabel', { label: itemLabel(item) })}
+                      aria-pressed={selecting ? selected.has(item.id) : undefined}
                     >
                       <Thumb photo={item.photo} />
+                      {selecting ? (
+                        <span className="parent-tile-check" aria-hidden="true">
+                          {selected.has(item.id) ? <IconCheck size={14} /> : null}
+                        </span>
+                      ) : null}
                       <span className="parent-badges">
                         {item.size ? <span className="parent-badge">{t('wardrobe.size', { size: item.size })}</span> : null}
                         {item.season !== 'all' ? (
@@ -94,12 +168,12 @@ export default function Wardrobe({ items, hasChildren, onAdd, onOpen, onOpenChil
           )
         })
       )}
-      <button type="button" className="parent-fab" onClick={onAdd}>
+      {selecting ? null : <button type="button" className="parent-fab" onClick={onAdd}>
         <span className="parent-fab-icon" aria-hidden="true">
           <IconCamera size={22} />
         </span>
         <span className="parent-fab-label">{t('wardrobe.add')}</span>
-      </button>
+      </button>}
     </section>
   )
 }
