@@ -450,6 +450,13 @@ describe('instellingen en back-up', () => {
     expect(await store.listItems()).toHaveLength(1)
   })
 
+  it('beperkt de bestandskeuze niet, zodat iOS json-bestanden niet uitgrijst', async () => {
+    renderParent()
+    await unlock()
+    fireEvent.click(screen.getByRole('button', { name: 'Back-up' }))
+    expect(await screen.findByLabelText('Back-upbestand kiezen')).not.toHaveAttribute('accept')
+  })
+
   async function openBackup() {
     renderParent()
     await unlock()
