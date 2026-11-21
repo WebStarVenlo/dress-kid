@@ -319,7 +319,8 @@ body:has(.parent-shell) {
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 4px;
   padding: 8px max(8px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom))
     max(8px, env(safe-area-inset-left));
@@ -350,7 +351,7 @@ body:has(.parent-shell) {
 .parent-tab-icon {
   display: grid;
   place-items: center;
-  width: 60px;
+  width: min(60px, 100%);
   height: 32px;
   border-radius: 16px;
   transition:
@@ -370,6 +371,17 @@ body:has(.parent-shell) {
   background: var(--grape);
   color: #fff;
   box-shadow: 0 2px 0 var(--grape-edge);
+}
+
+/* Five tabs on very narrow phones: keep labels on one line */
+@media (max-width: 360px) {
+  .parent-nav {
+    gap: 2px;
+  }
+
+  .parent-shell .parent-tab {
+    font-size: 0.68rem;
+  }
 }
 
 /* Floating "Add clothing" button */
