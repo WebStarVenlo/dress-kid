@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { DEFAULT_SETTINGS } from '../domain/types'
 import type { Category } from '../domain/types'
 import { canSpeak, playSound, setFeedbackEnabled, speak } from '../shared/feedback'
 import { createIndexedDbStore } from '../storage'
@@ -22,7 +23,7 @@ async function newStore(names: string[] = ['Sam'], soundEnabled = true): Promise
   counter += 1
   const store = createIndexedDbStore(`kid-feedback-${counter}-${Math.random()}`)
   for (const name of names) await store.addChild({ name, color: '#3366ff', sizes: {} })
-  await store.saveSettings({ currentSeason: 'all', soundEnabled })
+  await store.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: 'all', soundEnabled })
   return store
 }
 

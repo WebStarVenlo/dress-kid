@@ -17,7 +17,10 @@ export interface WardrobeStore {
   listItems(): Promise<ClothingItem[]>;
   getItem(id: string): Promise<ClothingItem | undefined>;
   addItem(input: NewClothingItem): Promise<ClothingItem>;
-  /** Changes fields of an item (not the exclusions). */
+  /**
+   * Changes fields of an item (not the exclusions). When `available` goes from true to false,
+   * `washedAt` is set to now; when it becomes true, `washedAt` is removed.
+   */
   updateItem(
     id: string,
     changes: Partial<Pick<ClothingItem, 'category' | 'name' | 'season' | 'size' | 'available' | 'photo'>>,
@@ -26,12 +29,27 @@ export interface WardrobeStore {
   deleteItem(id: string): Promise<void>;
   /** Sets or removes an exclusion between two items, on both sides. */
   setExcluded(idA: string, idB: string, excluded: boolean): Promise<void>;
+  /**
+   * Bulk laundry action, in one transaction: puts items into the wash (`available: false`,
+   * `washedAt` now, for items that were available) or takes them out (`available: true`,
+   * `washedAt` removed). Unknown ids are ignored.
+   */
+  setItemsAvailable(ids: string[], available: boolean): Promise<void>;
+  /**
+   * Laundry run (see `planLaundry`), in one transaction: worn items of earlier, not yet
+   * processed days go into the wash (per `autoWashCategories`) and those outfits are marked
+   * processed; with `autoReturnDays > 0` items that were in the wash long enough come back.
+   * Idempotent per day. `today` is the local date (YYYY-MM-DD); `now` defaults to `Date.now()`.
+   */
+  processLaundry(today: string, now?: number): Promise<{ washed: number; returned: number }>;
 
   /** Settings; missing fields (old data) get their default value. */
   getSettings(): Promise<Settings>;
   /**
    * Saves all settings (replaces them). Throws on an unknown season; an invalid
-   * `soundEnabled` becomes the default value `true`.
+   * `soundEnabled` becomes the default value `true`. `autoWashCategories` keeps only known
+   * categories (not an array = default); `autoReturnDays` is floored and capped at 365
+   * (invalid = 0, off).
    */
   saveSettings(settings: Settings): Promise<void>;
 
@@ -50,8 +68,8 @@ export interface WardrobeStore {
 
   getOutfit(childId: string, date: string): Promise<SavedOutfit | undefined>;
   /**
-   * Saves the outfit of that day. A previously earned sticker (`completedAt`) is kept,
-   * even if the child changes the outfit later. Throws if the child does not (or no longer) exist.
+   * Saves the outfit of that day. A previously earned sticker (`completedAt`) and the
+   * `laundryProcessed` mark are kept, even if the child changes the outfit later. Throws if the child does not (or no longer) exist.
    */
   saveOutfit(childId: string, date: string, outfit: Outfit): Promise<void>;
   /**

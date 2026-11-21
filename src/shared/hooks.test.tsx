@@ -3,7 +3,8 @@ import { StrictMode } from 'react'
 import { DEFAULT_SETTINGS } from '../domain/types'
 import type { ClothingItem, Settings } from '../domain/types'
 import type { WardrobeStore } from '../storage'
-import { usePhotoUrl, useWardrobe } from './hooks'
+import { todayKey } from '../domain/compat'
+import { ensureLaundryProcessed, usePhotoUrl, useWardrobe } from './hooks'
 
 function makeItem(id: string): ClothingItem {
   return {
@@ -29,7 +30,7 @@ function deferred<T>() {
 
 function fakeStore(
   listItems: () => Promise<ClothingItem[]>,
-  getSettings: () => Promise<Settings> = () => Promise.resolve({ currentSeason: 'summer', soundEnabled: true }),
+  getSettings: () => Promise<Settings> = () => Promise.resolve({ ...DEFAULT_SETTINGS, currentSeason: 'summer', soundEnabled: true }),
 ): WardrobeStore {
   const notUsed = () => Promise.reject(new Error('niet gebruikt'))
   return {
@@ -40,6 +41,8 @@ function fakeStore(
     updateItem: notUsed,
     deleteItem: notUsed,
     setExcluded: notUsed,
+    setItemsAvailable: notUsed,
+    processLaundry: vi.fn(() => Promise.resolve({ washed: 0, returned: 0 })),
     saveSettings: notUsed,
     listChildren: notUsed,
     addChild: notUsed,
@@ -68,7 +71,7 @@ describe('useWardrobe', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.items).toBe(items)
-    expect(result.current.settings).toEqual({ currentSeason: 'summer', soundEnabled: true })
+    expect(result.current.settings).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'summer', soundEnabled: true })
     expect(result.current.error).toBeUndefined()
   })
 
@@ -144,6 +147,56 @@ describe('useWardrobe', () => {
     const { result } = renderHook(() => useWardrobe(store), { wrapper: StrictMode })
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.items).toHaveLength(1)
+  })
+})
+
+describe('wasronde bij het laden', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('useWardrobe draait eerst processLaundry voor vandaag en laadt daarna', async () => {
+    const order: string[] = []
+    const store = fakeStore(() => {
+      order.push('listItems')
+      return Promise.resolve([makeItem('a')])
+    })
+    store.processLaundry = vi.fn((day: string) => {
+      order.push(`processLaundry:${day}`)
+      return Promise.resolve({ washed: 1, returned: 0 })
+    })
+    const first = renderHook(() => useWardrobe(store))
+    const second = renderHook(() => useWardrobe(store))
+    await waitFor(() => expect(first.result.current.loading).toBe(false))
+    await waitFor(() => expect(second.result.current.loading).toBe(false))
+    await act(() => first.result.current.reload())
+    // Once per store and day, also with several users and reloads.
+    expect(store.processLaundry).toHaveBeenCalledTimes(1)
+    expect(order[0]).toBe(`processLaundry:${todayKey()}`)
+    expect(order.slice(1)).toEqual(['listItems', 'listItems', 'listItems'])
+  })
+
+  it('een mislukte wasronde houdt het laden niet tegen en wordt later opnieuw geprobeerd', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const items = [makeItem('a')]
+    const store = fakeStore(() => Promise.resolve(items))
+    store.processLaundry = vi.fn(() => Promise.reject(new Error('stuk')))
+    const { result } = renderHook(() => useWardrobe(store))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.items).toBe(items)
+    expect(result.current.error).toBeUndefined()
+    expect(console.error).toHaveBeenCalled()
+    await act(() => result.current.reload())
+    expect(store.processLaundry).toHaveBeenCalledTimes(2)
+  })
+
+  it('ensureLaundryProcessed draait opnieuw voor een nieuwe dag', async () => {
+    const store = fakeStore(() => Promise.resolve([]))
+    await ensureLaundryProcessed(store, '2026-03-10')
+    await ensureLaundryProcessed(store, '2026-03-10')
+    await ensureLaundryProcessed(store, '2026-03-11')
+    expect(store.processLaundry).toHaveBeenCalledTimes(2)
+    expect(store.processLaundry).toHaveBeenLastCalledWith('2026-03-11')
   })
 })
 

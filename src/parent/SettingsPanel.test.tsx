@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, vi } from 'vitest'
+import { DEFAULT_SETTINGS } from '../domain/types'
 import type { Settings } from '../domain/types'
 import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
@@ -46,7 +47,7 @@ describe('geluid en voorlezen', () => {
   }
 
   it('negeert een tweede tik zolang het opslaan bezig is', async () => {
-    await renderLive({ currentSeason: 'winter', soundEnabled: true })
+    await renderLive({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true })
     const save = vi.spyOn(store, 'saveSettings')
     const toggle = screen.getByRole('switch', { name: 'Geluid en voorlezen' })
     fireEvent.click(toggle)
@@ -57,11 +58,11 @@ describe('geluid en voorlezen', () => {
     )
     await waitFor(() => expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toBeEnabled())
     expect(save).toHaveBeenCalledTimes(1)
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
   })
 
   it('zet geluid uit en weer aan en bewaart ook het seizoen', async () => {
-    await renderLive({ currentSeason: 'winter', soundEnabled: true })
+    await renderLive({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true })
     const toggle = screen.getByRole('switch', { name: 'Geluid en voorlezen' })
     expect(toggle).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByText('Geluidjes en voorlezen van de vragen in de kindmodus.')).toBeInTheDocument()
@@ -69,16 +70,16 @@ describe('geluid en voorlezen', () => {
     await waitFor(() =>
       expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toHaveAttribute('aria-checked', 'false'),
     )
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
     fireEvent.click(screen.getByRole('switch', { name: 'Geluid en voorlezen' }))
-    await waitFor(async () => expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true }))
+    await waitFor(async () => expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true }))
   })
 
   it('behoudt de geluidsinstelling bij het kiezen van een seizoen', async () => {
-    await renderLive({ currentSeason: 'all', soundEnabled: false })
+    await renderLive({ ...DEFAULT_SETTINGS, currentSeason: 'all', soundEnabled: false })
     expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toHaveAttribute('aria-checked', 'false')
     fireEvent.click(screen.getByRole('radio', { name: 'Zomer' }))
-    await waitFor(async () => expect(await store.getSettings()).toEqual({ currentSeason: 'summer', soundEnabled: false }))
+    await waitFor(async () => expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'summer', soundEnabled: false }))
   })
 })
 

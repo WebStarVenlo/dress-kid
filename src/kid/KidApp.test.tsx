@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { todayKey } from '../domain/compat'
+import { DEFAULT_SETTINGS } from '../domain/types'
 import type { Category, ClothingItem } from '../domain/types'
 import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
@@ -387,7 +388,7 @@ describe('KidApp', () => {
   describe('seizoen', () => {
     async function seasonOf(season: 'summer' | 'winter' | 'all') {
       const store = await newStore()
-      await store.saveSettings({ currentSeason: season, soundEnabled: true })
+      await store.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: season, soundEnabled: true })
       await add(store, 'top', 'Gele trui')
       const { container } = renderKid(store)
       await screen.findByRole('button', { name: 'Gele trui' })

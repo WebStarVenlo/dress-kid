@@ -1,5 +1,6 @@
 /** React hooks used by both the child and the parent area. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { todayKey } from '../domain/compat'
 import { DEFAULT_SETTINGS } from '../domain/types'
 import type { Child, ClothingItem, Settings } from '../domain/types'
 import { AppError, translateError } from '../i18n/AppError'
@@ -70,6 +71,33 @@ export function usePhotoUrl(photo: Blob | undefined): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
+// Laundry run
+
+/** The laundry run per store: at most one per local day (shared by kid and parent area). */
+const laundryRuns = new WeakMap<WardrobeStore, { day: string; run: Promise<void> }>()
+
+/**
+ * Runs `store.processLaundry` for `day` (default: today), at most once per store and day;
+ * concurrent callers share the same run. Never rejects: a failure is logged, the app carries
+ * on with the data as it is, and the next call tries again.
+ */
+export function ensureLaundryProcessed(store: WardrobeStore, day: string = todayKey()): Promise<void> {
+  const current = laundryRuns.get(store)
+  if (current?.day === day) return current.run
+  const run: Promise<void> = Promise.resolve()
+    .then(() => store.processLaundry(day))
+    .then(
+      () => undefined,
+      (error: unknown) => {
+        console.error(error)
+        if (laundryRuns.get(store)?.run === run) laundryRuns.delete(store)
+      },
+    )
+  laundryRuns.set(store, { day, run })
+  return run
+}
+
+// ---------------------------------------------------------------------------
 // useWardrobe
 
 export interface WardrobeState {
@@ -97,7 +125,10 @@ const INITIAL_STATE: LoadedState = {
   error: undefined,
 }
 
-/** Loads the items and settings from storage. */
+/**
+ * Loads the items and settings from storage. The day's laundry run (see
+ * `ensureLaundryProcessed`) finishes first, so the items are up to date.
+ */
 export function useWardrobe(store: WardrobeStore = getStore()): WardrobeState {
   const [state, setState] = useState<LoadedState>(INITIAL_STATE)
   const mountedRef = useRef(false)
@@ -107,6 +138,7 @@ export function useWardrobe(store: WardrobeStore = getStore()): WardrobeState {
     const request = ++requestRef.current
     let next: Partial<LoadedState>
     try {
+      await ensureLaundryProcessed(store)
       const [items, settings] = await Promise.all([store.listItems(), store.getSettings()])
       next = { items, settings, error: undefined }
     } catch (error) {

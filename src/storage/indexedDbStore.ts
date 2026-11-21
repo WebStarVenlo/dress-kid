@@ -6,9 +6,10 @@
  * IndexedDB) and in tests with fake-indexeddb. Outwardly `photo` is always a Blob.
  */
 import { openDB } from 'idb'
-import type { DBSchema, IDBPDatabase, IDBPTransaction, StoreNames } from 'idb'
+import type { DBSchema, IDBPDatabase, IDBPObjectStore, IDBPTransaction, StoreNames } from 'idb'
 import { isAvatarId } from '../domain/avatars'
 import type { AvatarId } from '../domain/avatars'
+import { isTimestamp, normalizeAutoReturnDays, normalizeAutoWashCategories, planLaundry } from '../domain/laundry'
 import { normalizeSize } from '../domain/sizes'
 import { CATEGORIES, DEFAULT_SETTINGS } from '../domain/types'
 import type {
@@ -32,8 +33,10 @@ import type { WardrobeStore } from './api'
 /**
  * Version 2: multiple children, sizes and parent PIN. An upgrade from version 1 drops all
  * stores and recreates them (the app was not in use yet at that point).
+ * Version 3: laundry tracking. Existing outfits are marked `laundryProcessed`, so the first
+ * laundry run does not put the whole history into the wash.
  */
-const DB_VERSION = 2
+const DB_VERSION = 3
 const SETTINGS_KEY = 'settings'
 const PIN_KEY = 'parentPin'
 const BACKUP_APP = 'dress-kid'
@@ -278,11 +281,29 @@ function cleanSoundEnabled(value: unknown): boolean {
 }
 
 function normalizeSettings(value: unknown): Settings {
-  if (!isRecord(value)) return { ...DEFAULT_SETTINGS }
+  const record = isRecord(value) ? value : {}
   return {
-    currentSeason: isCurrentSeason(value.currentSeason) ? value.currentSeason : DEFAULT_SETTINGS.currentSeason,
-    soundEnabled: cleanSoundEnabled(value.soundEnabled),
+    currentSeason: isCurrentSeason(record.currentSeason) ? record.currentSeason : DEFAULT_SETTINGS.currentSeason,
+    soundEnabled: cleanSoundEnabled(record.soundEnabled),
+    autoWashCategories: normalizeAutoWashCategories(record.autoWashCategories),
+    autoReturnDays: normalizeAutoReturnDays(record.autoReturnDays),
   }
+}
+
+/**
+ * Sets the availability on a copy of `item` and keeps `washedAt` consistent: it is set to
+ * `now` when the item goes from available to unavailable, kept while it stays unavailable
+ * (also when absent: an item put away before laundry tracking keeps no `washedAt`), and
+ * removed when the item becomes available again.
+ */
+function withAvailability(item: StoredItem, available: boolean, now: number): StoredItem {
+  const result: StoredItem = { ...item, available }
+  delete result.washedAt
+  if (!available) {
+    if (item.available) result.washedAt = now
+    else if (isTimestamp(item.washedAt)) result.washedAt = item.washedAt
+  }
+  return result
 }
 
 /** Sets `stickersEnabled` on a copy of `base` if it is a real boolean; otherwise (including missing) it stays absent = on. */
@@ -306,10 +327,11 @@ function isCompletedAt(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
-/** Copy of a stored outfit; `completedAt` only if it is set (and valid). */
+/** Copy of a stored outfit; `completedAt` only if it is set (and valid), `laundryProcessed` only if true. */
 function toSavedOutfit(saved: SavedOutfit): SavedOutfit {
   const result: SavedOutfit = { childId: saved.childId, date: saved.date, outfit: normalizeOutfit(saved.outfit) }
   if (isCompletedAt(saved.completedAt)) result.completedAt = saved.completedAt
+  if (saved.laundryProcessed === true) result.laundryProcessed = true
   return result
 }
 
@@ -351,10 +373,20 @@ interface BackupItem {
   name?: string
   season: ItemSeason
   available: boolean
+  /** Only while `available` is false (and known). */
+  washedAt?: number
   excludedIds: string[]
   size?: string
   createdAt: number
   photo: string
+}
+
+/**
+ * Outfit in a backup. `laundryProcessed` is always written; an outfit without it (old
+ * backup) is imported as processed.
+ */
+interface BackupOutfit extends Omit<SavedOutfit, 'laundryProcessed'> {
+  laundryProcessed: boolean
 }
 
 /** Backup format. The parent PIN is deliberately not included. */
@@ -365,7 +397,7 @@ interface BackupFile {
   settings: Settings
   children: Child[]
   items: BackupItem[]
-  outfits: SavedOutfit[]
+  outfits: BackupOutfit[]
 }
 
 type BackupLabelCode = 'backupLabelChild' | 'backupLabelItem' | 'backupLabelOutfit'
@@ -446,7 +478,7 @@ function parsePhoto(value: unknown, label: BackupLabel): StoredPhoto {
 function parseItem(value: unknown, index: number): StoredItem {
   const label = backupLabel('backupLabelItem', index)
   if (!isRecord(value)) throw invalid('backupDetailInvalid', { label })
-  const { id, category, name, season, available, excludedIds, size, createdAt, photo } = value
+  const { id, category, name, season, available, washedAt, excludedIds, size, createdAt, photo } = value
   if (typeof id !== 'string' || !id) throw invalid('backupDetailNoId', { label })
   if (!isCategory(category)) throw invalid('backupDetailBadCategory', { label })
   if (!isItemSeason(season)) throw invalid('backupDetailBadSeason', { label })
@@ -467,6 +499,8 @@ function parseItem(value: unknown, index: number): StoredItem {
     photo: parsePhoto(photo, label),
     photoRev: newId(),
   }
+  // An invalid `washedAt` (or one on an available item) is silently dropped.
+  if (!available && isTimestamp(washedAt)) base.washedAt = washedAt
   return withSize(withName(base, typeof name === 'string' ? name : undefined), cleanedSize)
 }
 
@@ -499,6 +533,9 @@ function parseOutfits(
     const saved: SavedOutfit = { childId: entry.childId, date: entry.date, outfit }
     // An invalid completion time is silently dropped (the outfit itself stays).
     if (isCompletedAt(entry.completedAt)) saved.completedAt = entry.completedAt
+    // Only an explicit `false` (from a newer backup) leaves the day unprocessed. Old backups
+    // have no such field: their days count as processed, so nothing goes into the wash.
+    if (entry.laundryProcessed !== false) saved.laundryProcessed = true
     // JSON key, so no combination of childId and date can collide.
     byKey.set(JSON.stringify([entry.childId, entry.date]), saved)
   })
@@ -536,8 +573,9 @@ function parseBackup(json: unknown): ParsedBackup {
     if (!isRecord(json.settings) || !isCurrentSeason(json.settings.currentSeason)) {
       throw invalid('backupDetailSettingsInvalid')
     }
-    // Older backups have no `soundEnabled`; that (and an invalid value) becomes `true`.
-    settings = { currentSeason: json.settings.currentSeason, soundEnabled: cleanSoundEnabled(json.settings.soundEnabled) }
+    // Older backups lack `soundEnabled`, `autoWashCategories` and `autoReturnDays`; those (and
+    // invalid values) get their default.
+    settings = normalizeSettings(json.settings)
   }
 
   if (!Array.isArray(json.items)) throw invalid('backupDetailItemsMissing')
@@ -562,6 +600,19 @@ function parseBackup(json: unknown): ParsedBackup {
   const children = parseChildren(json.children)
   const childIds = new Set(children.map((child) => child.id))
   return { settings, children, items, outfits: parseOutfits(json.outfits, itemsById, childIds) }
+}
+
+// ---------------------------------------------------------------------------
+// Migration
+
+type UpgradeOutfitStore = IDBPObjectStore<DressKidDB, ArrayLike<Names>, 'outfits', 'versionchange'>
+
+async function markAllOutfitsProcessed(outfits: UpgradeOutfitStore): Promise<void> {
+  let cursor = await outfits.openCursor()
+  while (cursor) {
+    if (cursor.value.laundryProcessed !== true) await cursor.update({ ...cursor.value, laundryProcessed: true })
+    cursor = await cursor.continue()
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -591,7 +642,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
   function db(): Promise<IDBPDatabase<DressKidDB>> {
     if (!dbPromise) {
       const opening = openDB<DressKidDB>(dbName, DB_VERSION, {
-        upgrade(database, oldVersion) {
+        upgrade(database, oldVersion, _newVersion, transaction) {
           if (oldVersion > 0 && oldVersion < 2) {
             // No migration: drop the old stores and start fresh.
             for (const name of Array.from(database.objectStoreNames)) database.deleteObjectStore(name)
@@ -605,6 +656,18 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
             outfits.createIndex('childId', 'childId')
           }
           if (!names.contains('pin')) database.createObjectStore('pin')
+          if (oldVersion === 2) {
+            // Laundry tracking: the days so far count as processed. A failure aborts the
+            // upgrade (and so the opening); nothing is changed halfway.
+            void markAllOutfitsProcessed(transaction.objectStore('outfits')).catch((error: unknown) => {
+              console.error(error)
+              try {
+                transaction.abort()
+              } catch {
+                // Already finished or aborted.
+              }
+            })
+          }
         },
         blocking() {
           // A newer version (e.g. in another tab) wants to upgrade: make room.
@@ -680,7 +743,7 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
         let updated: StoredItem = { ...existing }
         if (changes.category !== undefined) updated.category = changes.category
         if (changes.season !== undefined) updated.season = changes.season
-        if (changes.available !== undefined) updated.available = Boolean(changes.available)
+        if (changes.available !== undefined) updated = withAvailability(updated, Boolean(changes.available), Date.now())
         if (photo) {
           updated.photo = photo
           updated.photoRev = newId()
@@ -732,17 +795,64 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
       })
     },
 
+    async setItemsAvailable(ids, available) {
+      const unique = [...new Set(ids)]
+      if (unique.length === 0) return
+      const now = Date.now()
+      const tx = (await db()).transaction('items', 'readwrite')
+      await runInTx(tx, async () => {
+        const found = await Promise.all(unique.map((id) => tx.store.get(id)))
+        await Promise.all(
+          found.map((item) => (item ? tx.store.put(withAvailability(item, Boolean(available), now)) : undefined)),
+        )
+      })
+    },
+
+    async processLaundry(today, now = Date.now()) {
+      if (typeof today !== 'string' || !DATE_RE.test(today)) throw new AppError('unknown')
+      const tx = (await db()).transaction(['items', 'outfits', 'settings'], 'readwrite')
+      return runInTx(tx, async () => {
+        const items = tx.objectStore('items')
+        const outfits = tx.objectStore('outfits')
+        const [storedItems, storedOutfits, storedSettings] = await Promise.all([
+          items.getAll(),
+          outfits.getAll(),
+          tx.objectStore('settings').get(SETTINGS_KEY),
+        ])
+        const plan = planLaundry({
+          outfits: storedOutfits,
+          items: storedItems,
+          settings: normalizeSettings(storedSettings),
+          today,
+          now,
+        })
+        const byId = new Map(storedItems.map((item) => [item.id, item]))
+        const outfitsByKey = new Map(storedOutfits.map((saved) => [JSON.stringify([saved.childId, saved.date]), saved]))
+        const writes: Array<Promise<unknown>> = []
+        for (const id of plan.toWash) {
+          const item = byId.get(id)
+          if (item) writes.push(items.put(withAvailability(item, false, now)))
+        }
+        for (const id of plan.toReturn) {
+          const item = byId.get(id)
+          if (item) writes.push(items.put(withAvailability(item, true, now)))
+        }
+        for (const key of plan.processedOutfitKeys) {
+          const saved = outfitsByKey.get(JSON.stringify(key))
+          if (saved) writes.push(outfits.put({ ...saved, laundryProcessed: true }))
+        }
+        await Promise.all(writes)
+        return { washed: plan.toWash.length, returned: plan.toReturn.length }
+      })
+    },
+
     async getSettings() {
       return normalizeSettings(await (await db()).get('settings', SETTINGS_KEY))
     },
 
     async saveSettings(settings) {
       if (!isCurrentSeason(settings.currentSeason)) throw new AppError('seasonUnknown')
-      await (await db()).put(
-        'settings',
-        { currentSeason: settings.currentSeason, soundEnabled: cleanSoundEnabled(settings.soundEnabled) },
-        SETTINGS_KEY,
-      )
+      await (await db()).put('settings', normalizeSettings(settings), SETTINGS_KEY)
     },
 
     async listChildren() {
@@ -824,8 +934,9 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
         const outfits = tx.objectStore('outfits')
         const existing = await outfits.get([childId, date])
         const next: SavedOutfit = { childId, date, outfit: normalizeOutfit(outfit) }
-        // An earned sticker stays, even if the outfit changes afterwards.
+        // An earned sticker stays, even if the outfit changes afterwards; so does the laundry mark.
         if (isCompletedAt(existing?.completedAt)) next.completedAt = existing.completedAt
+        if (existing?.laundryProcessed === true) next.laundryProcessed = true
         await outfits.put(next)
       })
     },
@@ -837,12 +948,14 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
         const outfits = tx.objectStore('outfits')
         const existing = await outfits.get([childId, date])
         if (isCompletedAt(existing?.completedAt)) return false
-        await outfits.put({
+        const next: SavedOutfit = {
           childId,
           date,
           outfit: existing ? normalizeOutfit(existing.outfit) : {},
           completedAt: Date.now(),
-        })
+        }
+        if (existing?.laundryProcessed === true) next.laundryProcessed = true
+        await outfits.put(next)
         return true
       })
     },
@@ -876,6 +989,19 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
           tx.objectStore('outfits').getAll(),
         ]),
       )
+      const toBackupItem = (item: StoredItem): BackupItem => {
+        const result: BackupItem = {
+          id: item.id,
+          category: item.category,
+          season: item.season,
+          available: item.available,
+          excludedIds: [...item.excludedIds],
+          createdAt: item.createdAt,
+          photo: photoToDataUrl(item.photo),
+        }
+        if (!item.available && isTimestamp(item.washedAt)) result.washedAt = item.washedAt
+        return withSize(withName(result, item.name), item.size)
+      }
       const backup: BackupFile = {
         app: BACKUP_APP,
         version: BACKUP_VERSION,
@@ -898,26 +1024,8 @@ export function createIndexedDbStore(dbName = 'dress-kid'): WardrobeStore {
               child.stickersEnabled,
             ),
           ),
-        items: items
-          .sort((a, b) => a.createdAt - b.createdAt)
-          .map((item) =>
-            withSize(
-              withName<BackupItem>(
-                {
-                  id: item.id,
-                  category: item.category,
-                  season: item.season,
-                  available: item.available,
-                  excludedIds: [...item.excludedIds],
-                  createdAt: item.createdAt,
-                  photo: photoToDataUrl(item.photo),
-                },
-                item.name,
-              ),
-              item.size,
-            ),
-          ),
-        outfits: outfits.map(toSavedOutfit),
+        items: items.sort((a, b) => a.createdAt - b.createdAt).map(toBackupItem),
+        outfits: outfits.map((saved) => ({ ...toSavedOutfit(saved), laundryProcessed: saved.laundryProcessed === true })),
       }
       return new Blob([JSON.stringify(backup)], { type: 'application/json' })
     },
