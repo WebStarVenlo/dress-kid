@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { CATEGORIES, CATEGORY_EMOJI, CATEGORY_LABELS, SEASON_LABELS } from '../domain/types'
 import type { Child, ClothingItem } from '../domain/types'
@@ -16,6 +16,9 @@ import { Thumb, itemLabel } from './shared'
 interface WardrobeProps {
   items: ClothingItem[]
   children: Child[]
+  /** Filter state lives in the parent so it survives opening an item. */
+  filter: WardrobeFilter
+  onFilterChange: (filter: WardrobeFilter) => void
   /** False when it is certain no child has been created yet (not while loading or after a load error). */
   hasChildren: boolean
   onAdd: () => void
@@ -25,13 +28,12 @@ interface WardrobeProps {
   onSetAvailable: (ids: string[], available: boolean) => Promise<void>
 }
 
-export default function Wardrobe({ items, children, hasChildren, onAdd, onOpen, onOpenChildren, onSetAvailable }: WardrobeProps) {
+export default function Wardrobe({ items, children, filter: rawFilter, onFilterChange, hasChildren, onAdd, onOpen, onOpenChildren, onSetAvailable }: WardrobeProps) {
   const { t } = useTranslation('parent')
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
-  const [rawFilter, setRawFilter] = useState<WardrobeFilter>(EMPTY_WARDROBE_FILTER)
 
   const sizeOptions = useMemo(() => distinctSizes(items), [items])
   const hasSizeless = items.some((item) => !item.size?.trim())
@@ -43,13 +45,21 @@ export default function Wardrobe({ items, children, hasChildren, onAdd, onOpen, 
     const childId = children.some((c) => c.id === rawFilter.childId) ? rawFilter.childId : undefined
     return { sizes, withoutSize, childId }
   }, [rawFilter, sizeOptions, hasSizeless, children])
+  // Write the pruned filter back so a size that reappears later is not silently re-selected.
+  const stale =
+    filter.sizes.length !== rawFilter.sizes.length ||
+    filter.withoutSize !== rawFilter.withoutSize ||
+    filter.childId !== rawFilter.childId
+  useEffect(() => {
+    if (stale) onFilterChange(filter)
+  }, [stale, filter, onFilterChange])
   const filterActive = isWardrobeFilterActive(filter)
   const visible = useMemo(() => filterWardrobe(items, filter, children), [items, filter, children])
   // Only visible items can be chosen; items that disappeared (e.g. deleted) no longer count.
   const chosen = visible.filter((item) => selected.has(item.id))
 
   function updateFilter(next: WardrobeFilter) {
-    setRawFilter(next)
+    onFilterChange(next)
     const stillVisible = new Set(filterWardrobe(items, next, children).map((item) => item.id))
     setSelected((prev) => new Set([...prev].filter((id) => stillVisible.has(id))))
   }
@@ -99,7 +109,7 @@ export default function Wardrobe({ items, children, hasChildren, onAdd, onOpen, 
         <span className="parent-count">
           {filterActive ? t('wardrobe.filteredCount', { shown: visible.length, total: items.length }) : items.length}
         </span>
-        {items.length > 0 && !selecting ? (
+        {visible.length > 0 && !selecting ? (
           <button type="button" className="parent-select-toggle" onClick={() => setSelecting(true)}>
             {t('wardrobe.select')}
           </button>
@@ -144,7 +154,7 @@ export default function Wardrobe({ items, children, hasChildren, onAdd, onOpen, 
       )}
       {items.length > 0 ? (
         <div className="parent-card parent-filter">
-          {sizeOptions.length > 0 || hasSizeless ? (
+          {sizeOptions.length > 0 ? (
             <div className="parent-filter-row" role="group" aria-label={t('wardrobe.filterSize')}>
               <span className="parent-filter-label" aria-hidden="true">
                 {t('wardrobe.filterSize')}
@@ -234,8 +244,8 @@ export default function Wardrobe({ items, children, hasChildren, onAdd, onOpen, 
           </p>
         </div>
       ) : visible.length === 0 ? (
-        <div className="parent-card parent-empty" role="status">
-          <p>
+        <div className="parent-card parent-empty">
+          <p role="status">
             <strong>{t('wardrobe.noResultsTitle')}</strong>
           </p>
           <p>{t('wardrobe.noResultsHint')}</p>

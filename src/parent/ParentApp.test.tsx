@@ -257,6 +257,7 @@ describe('kledingkast', () => {
     await seed('dress', 'Jurk D')
   }
   const filterGroup = (name: string) => screen.getByRole('group', { name })
+  const titleRow = () => document.querySelector('.parent-title-row') as HTMLElement
   const chip = (group: string, name: string) => within(filterGroup(group)).getByRole('button', { name })
 
   it('filtert op één maat en toont het aantal', async () => {
@@ -285,7 +286,7 @@ describe('kledingkast', () => {
     expect(screen.getByRole('button', { name: /Jurk D/ })).toBeInTheDocument()
     expect(screen.getByText('3 van 4')).toBeInTheDocument()
     fireEvent.click(chip('Filter op maat', 'Alle'))
-    expect(screen.getByText('4')).toBeInTheDocument()
+    expect(within(titleRow()).getByText('4')).toBeInTheDocument()
   })
 
   it('filtert op past bij kind, ook gecombineerd met een maat', async () => {
@@ -318,7 +319,34 @@ describe('kledingkast', () => {
     fireEvent.click(within(notFound).getByRole('button', { name: 'Filter wissen' }))
     expect(screen.queryByText('Niets gevonden.')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Shirt B/ })).toBeInTheDocument()
-    expect(screen.getByText('4')).toBeInTheDocument()
+    expect(within(titleRow()).getByText('4')).toBeInTheDocument()
+  })
+
+  it('houdt het filter vast na het openen van een kledingstuk', async () => {
+    await seedSizes()
+    renderParent()
+    await unlock()
+    fireEvent.click(chip('Filter op maat', '98'))
+    fireEvent.click(screen.getByRole('button', { name: /Shirt A/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Terug naar de kast/ }))
+    expect(await screen.findByText('1 van 4')).toBeInTheDocument()
+    expect(chip('Filter op maat', '98')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('button', { name: /Shirt B/ })).not.toBeInTheDocument()
+  })
+
+  it('laat een maat los die niet meer bestaat', async () => {
+    await seedSizes()
+    renderParent()
+    await unlock()
+    fireEvent.click(chip('Filter op maat', '98'))
+    fireEvent.click(screen.getByRole('button', { name: /Shirt A/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Verwijderen/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ja, verwijderen' }))
+    await screen.findByRole('button', { name: /Kleding toevoegen/ })
+    expect(within(filterGroup('Filter op maat')).queryByRole('button', { name: '98' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Filter wissen' })).not.toBeInTheDocument()
+    expect(within(titleRow()).getByText('3')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Shirt B/ })).toBeInTheDocument()
   })
 
   it('selecteert bij een filter alleen zichtbare kleding', async () => {

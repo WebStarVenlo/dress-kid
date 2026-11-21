@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { SHARED_FLAG, takeShared } from '../domain/sharedPhotos'
+import { EMPTY_WARDROBE_FILTER } from '../domain/sizes'
+import type { WardrobeFilter } from '../domain/sizes'
 import { useChildren, useWardrobe } from '../shared/hooks'
 import { IconArrowRight, IconBackup, IconChildren, IconSettings, IconWardrobe, IconWash } from '../shared/icons'
 import { getStore, requestPersistentStorage } from '../storage'
@@ -164,6 +166,7 @@ function ParentMain({ store }: { store: WardrobeStore }) {
   const { items, settings, loading, error, reload } = useWardrobe(store)
   const { children, loading: childrenLoading, error: childrenError, reload: reloadChildren } = useChildren(store)
   const [view, setView] = useState<View>({ name: 'wardrobe' })
+  const [wardrobeFilter, setWardrobeFilter] = useState<WardrobeFilter>(EMPTY_WARDROBE_FILTER)
   useSharedPhotos(setView)
 
   // Ask the browser to protect the wardrobe from automatic cleanup.
@@ -249,6 +252,8 @@ function ParentMain({ store }: { store: WardrobeStore }) {
       <Wardrobe
         items={items}
         children={children}
+        filter={wardrobeFilter}
+        onFilterChange={setWardrobeFilter}
         // Only show the 'no child yet' hint once it is certain there really are no children.
         hasChildren={childrenLoading || childrenError !== undefined || children.length > 0}
         onAdd={() => setView({ name: 'add' })}
