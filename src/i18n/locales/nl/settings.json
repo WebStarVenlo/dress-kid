@@ -63,7 +63,15 @@
     "soundTitle": "Geluid en voorlezen",
     "soundHelp": "Geluidjes en voorlezen van de vragen in de kindmodus.",
     "saved": "Opgeslagen.",
-    "saveFailed": "Opslaan is niet gelukt."
+    "saveFailed": "Opslaan is niet gelukt.",
+    "washTitle": "Was",
+    "washCategories": "Automatisch in de was na dragen",
+    "washCategoriesHint": "Kleding in deze soorten gaat de dag nadat je kind het droeg vanzelf in de wasmand.",
+    "returnDays": "Automatisch uit de was na",
+    "returnOff": "Uit",
+    "returnDaysOption_one": "{{count}} dag",
+    "returnDaysOption_other": "{{count}} dagen",
+    "returnHint": "Na zoveel dagen in de was is kleding vanzelf weer beschikbaar. Bij “Uit” haal je kleding zelf uit de was."
   },
   "pin": {
     "title": "Pincode",

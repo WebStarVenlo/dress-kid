@@ -285,8 +285,10 @@ function KidDay({
     if (now === day) return false
     setOutfitReady(false)
     setDay(now)
+    // A new day: the laundry run (worn clothes go into the wash) happens while loading.
+    void reload()
     return true
-  }, [day])
+  }, [day, reload])
 
   // If the app stays open overnight, we start the new day with an empty outfit.
   useEffect(() => {

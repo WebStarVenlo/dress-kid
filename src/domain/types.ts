@@ -70,6 +70,12 @@ export interface ClothingItem {
   /** False = temporarily unavailable (e.g. in the laundry). */
   available: boolean;
   /**
+   * Moment (epoch ms) the item went into the wash (`available` became false). Only present
+   * while the item is unavailable, and only if that happened after laundry tracking existed:
+   * an item without `washedAt` is never returned automatically.
+   */
+  washedAt?: number;
+  /**
    * Ids of items that do NOT go with this one.
    * Exclusions are symmetric: the storage layer keeps track of both sides.
    */
@@ -133,9 +139,26 @@ export interface Settings {
   currentSeason: CurrentSeason;
   /** "Sound and read-aloud" in child mode. On by default; old data and backups get `true`. */
   soundEnabled: boolean;
+  /**
+   * Categories whose items go into the wash automatically the day after they were worn.
+   * In CATEGORIES order, without duplicates. Old data and backups get the default.
+   */
+  autoWashCategories: Category[];
+  /** Items in the wash come back automatically after this many days; 0 = never (off). */
+  autoReturnDays: number;
 }
 
-export const DEFAULT_SETTINGS: Settings = { currentSeason: 'all', soundEnabled: true };
+export const DEFAULT_AUTO_WASH_CATEGORIES: readonly Category[] = ['top', 'bottom', 'dress', 'socks'];
+
+/** Upper limit for `autoReturnDays`. */
+export const MAX_AUTO_RETURN_DAYS = 365;
+
+export const DEFAULT_SETTINGS: Settings = {
+  currentSeason: 'all',
+  soundEnabled: true,
+  autoWashCategories: [...DEFAULT_AUTO_WASH_CATEGORIES],
+  autoReturnDays: 0,
+};
 
 /** The child's choice: at most one item id per category. */
 export type Outfit = Partial<Record<Category, string>>;
@@ -151,4 +174,10 @@ export interface SavedOutfit {
    * Missing if the day has not (yet) been completed. Stays if the outfit changes later.
    */
   completedAt?: number;
+  /**
+   * True once the laundry run has handled this (past) day: its items went into the wash
+   * (where applicable). Missing = not processed yet. Outfits from before laundry tracking
+   * and from old backups count as processed.
+   */
+  laundryProcessed?: boolean;
 }

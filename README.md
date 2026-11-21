@@ -12,9 +12,15 @@ Dress Kid is a small web app that lets children (from about age 4) pick their ow
 - **Photos from a webshop**: see [Adding photos from a webshop](#adding-photos-from-a-webshop).
 - **Does not go with**: you can mark which items are not worn together. This applies in both directions.
 - **Season**: items are marked as summer, winter or always. The season the parent sets determines what the child sees.
-- **In the wash**: an item can be temporarily marked as unavailable without deleting it.
+- **In the wash**: an item can be temporarily marked as unavailable without deleting it. Clothes worn on a previous day go into the wash automatically (per category, configurable under Settings → Was), and can optionally return by themselves after 1–7 days. The **Wasmand** tab lists everything in the wash (tap one to take it out, or "Alles uit de was"), and "Selecteren" in the wardrobe puts several items in or out of the wash at once.
 - **Backup**: the whole wardrobe (including photos) can be exported and imported again as a single JSON file. On devices that support it, the share sheet appears (handy on iPhone and iPad); otherwise the file is downloaded. Restoring rejects files larger than 200 MB and photos larger than 10 MB.
 - **Offline and installable**: as a PWA the app works without internet and can be added to the home screen of a phone or tablet.
+
+## Demo backup
+
+`demo/dress-kid-backup-demo.json` is a ready-made backup with two children (Anna, size 110, and Tom, size 68), about 30 clothes each with generated placeholder photos, a few items in the wash and two past outfits per child. To try it, open the parent area, go to the **Backup** tab and restore this file (this replaces the current wardrobe).
+
+Regenerate it with `node scripts/generate-demo-backup.mjs` (optionally `--now=2026-11-21T10:00:00Z` or `--out=path`). The wash times and outfit dates are relative to the moment of generation, so regenerate shortly before a demo to keep the Wasmand filled (items return automatically after 2 days).
 
 ## Adding photos from a webshop
 

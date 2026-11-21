@@ -11,6 +11,7 @@ import {
   visibleCategories,
   wearableItems,
 } from './compat'
+import { DEFAULT_SETTINGS } from './types'
 import type { Category, ClothingItem, Settings } from './types'
 
 let counter = 0
@@ -28,9 +29,9 @@ function item(id: string, category: Category, extra: Partial<ClothingItem> = {})
   }
 }
 
-const ALL: Settings = { currentSeason: 'all', soundEnabled: true }
-const SUMMER: Settings = { currentSeason: 'summer', soundEnabled: true }
-const WINTER: Settings = { currentSeason: 'winter', soundEnabled: true }
+const ALL: Settings = { ...DEFAULT_SETTINGS, currentSeason: 'all', soundEnabled: true }
+const SUMMER: Settings = { ...DEFAULT_SETTINGS, currentSeason: 'summer', soundEnabled: true }
+const WINTER: Settings = { ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true }
 
 describe('isInSeason', () => {
   it('altijd waar als er geen seizoensfilter is', () => {

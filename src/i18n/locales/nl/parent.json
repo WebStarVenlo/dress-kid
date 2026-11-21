@@ -11,7 +11,8 @@
       "wardrobe": "Kast",
       "children": "Kinderen",
       "settings": "Instellingen",
-      "backup": "Back-up"
+      "backup": "Back-up",
+      "laundry": "Wasmand"
     }
   },
   "gate": {
@@ -51,7 +52,15 @@
     "tileLabel": "{{label}}, bekijk of wijzig",
     "size": "Maat {{size}}",
     "inWash": "In de was",
-    "add": "Kleding toevoegen"
+    "add": "Kleding toevoegen",
+    "select": "Selecteren",
+    "selectLabel": "{{label}}, selecteren",
+    "selectedCount": "{{count}} geselecteerd",
+    "toWash": "In de was ({{count}})",
+    "fromWash": "Uit de was ({{count}})",
+    "cancelSelect": "Annuleren",
+    "selectHint": "Tik op kleding om te selecteren.",
+    "washFailed": "Dit is niet gelukt. Probeer het nog eens."
   },
   "itemDetail": {
     "back": "Terug naar de kast",
@@ -150,5 +159,17 @@
   "shared": {
     "sizeLabel": "Maat (mag leeg blijven)",
     "sizePlaceholder": "bijv. 110"
+  },
+  "laundry": {
+    "title": "Wasmand",
+    "hint": "Gedragen kleding gaat de dag erna automatisch in de was. Tik op een kledingstuk om het weer beschikbaar te maken.",
+    "empty": "De wasmand is leeg",
+    "emptyHint": "Gedragen kleding verschijnt hier de dag nadat je kind het heeft gedragen.",
+    "itemLabel": "{{label}}, uit de was halen",
+    "sinceToday": "Sinds vandaag",
+    "since_one": "Sinds {{count}} dag",
+    "since_other": "Sinds {{count}} dagen",
+    "allOut": "Alles uit de was",
+    "failed": "Dit is niet gelukt. Probeer het nog eens."
   }
 }

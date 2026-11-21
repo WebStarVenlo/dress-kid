@@ -1,6 +1,7 @@
+import { todayKey } from '../domain/compat'
 import { DEFAULT_SETTINGS, stickersOn } from '../domain/types'
 import type { AvatarId } from '../domain/avatars'
-import type { ClothingItem, NewChild, NewClothingItem, Settings, StoredPin } from '../domain/types'
+import type { Category, ClothingItem, NewChild, NewClothingItem, Settings, StoredPin } from '../domain/types'
 import { translateError } from '../i18n/AppError'
 import type { WardrobeStore } from './api'
 import { createIndexedDbStore } from './indexedDbStore'
@@ -269,7 +270,9 @@ describe('createIndexedDbStore: kinderen', () => {
     expect(await store.getOutfit(a.id, '2026-01-01')).toBeUndefined()
     expect(await store.getOutfit(a.id, '2026-01-02')).toBeUndefined()
     expect((await store.getOutfit(b.id, '2026-01-01'))?.outfit).toEqual({ top: 'z' })
-    expect((await backupJson(store)).outfits).toEqual([{ childId: b.id, date: '2026-01-01', outfit: { top: 'z' } }])
+    expect((await backupJson(store)).outfits).toEqual([
+      { childId: b.id, date: '2026-01-01', outfit: { top: 'z' }, laundryProcessed: false },
+    ])
     // Unknown id: nothing happens.
     await store.deleteChild('weg')
     expect(await store.listChildren()).toEqual([b])
@@ -398,8 +401,8 @@ describe('createIndexedDbStore: instellingen en outfits', () => {
   it('geeft standaardinstellingen als er niets is opgeslagen', async () => {
     const store = freshStore()
     expect(await store.getSettings()).toEqual(DEFAULT_SETTINGS)
-    await store.saveSettings({ currentSeason: 'winter', soundEnabled: true })
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
+    await store.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true })
   })
 
   it('slaat outfits per kind en datum op en overschrijft ze', async () => {
@@ -478,7 +481,7 @@ describe('createIndexedDbStore: back-up', () => {
     expect(json.children).toEqual([
       { id: k.id, name: 'Noor', color: '#ff8800', sizes: { top: ['110'] }, createdAt: k.createdAt },
     ])
-    expect(json.outfits).toEqual([{ childId: k.id, date: '2026-02-02', outfit: { top: a.id } }])
+    expect(json.outfits).toEqual([{ childId: k.id, date: '2026-02-02', outfit: { top: a.id }, laundryProcessed: false }])
     expect(json).not.toHaveProperty('pin')
     const text = await (await store.exportBackup()).text()
     expect(text).not.toContain(PIN.salt)
@@ -492,7 +495,7 @@ describe('createIndexedDbStore: back-up', () => {
     const b = await source.addItem(newItem({ category: 'bottom', season: 'winter', size: '116' }))
     await source.updateItem(b.id, { available: false })
     await source.setExcluded(a.id, b.id, true)
-    await source.saveSettings({ currentSeason: 'winter', soundEnabled: false })
+    await source.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
     const k1 = await source.addChild(newChild({ sizes: { top: ['110', '116'], bottom: ['116'] } }))
     const k2 = await source.addChild(newChild({ name: 'Sam', color: '#0af' }))
     await source.saveOutfit(k1.id, '2026-02-02', { top: a.id, bottom: b.id })
@@ -511,7 +514,7 @@ describe('createIndexedDbStore: back-up', () => {
     expect(items[1]?.size).toBe('116')
     expect(items[0]?.photo.type).toBe('image/webp')
     expect(await bytesOf(items[0]!.photo)).toEqual(bigPhoto)
-    expect(await target.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+    expect(await target.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
     expect(await target.listChildren()).toEqual(await source.listChildren())
     expect(await target.getOutfit(k1.id, '2026-02-02')).toEqual({
       childId: k1.id,
@@ -573,8 +576,13 @@ describe('createIndexedDbStore: back-up', () => {
     expect((await store.getItem('a'))?.excludedIds).toEqual(['b'])
     expect((await store.getItem('b'))?.excludedIds).toEqual(['a'])
     expect(await store.getItem('b')).not.toHaveProperty('name')
-    expect(await store.getOutfit('k1', '2026-01-01')).toEqual({ childId: 'k1', date: '2026-01-01', outfit: { top: 'a' } })
-    expect(await store.getSettings()).toEqual({ currentSeason: 'summer', soundEnabled: true })
+    expect(await store.getOutfit('k1', '2026-01-01')).toEqual({
+      childId: 'k1',
+      date: '2026-01-01',
+      outfit: { top: 'a' },
+      laundryProcessed: true,
+    })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'summer', soundEnabled: true })
     expect(await bytesOf((await store.getItem('a'))!.photo)).toEqual([1, 2, 3])
   })
 
@@ -702,7 +710,7 @@ describe('createIndexedDbStore: back-up', () => {
     const store = freshStore()
     const existing = await store.addItem(newItem({ name: 'Blijft' }))
     const kid = await store.addChild(newChild({ name: 'Blijft' }))
-    await store.saveSettings({ currentSeason: 'winter', soundEnabled: false })
+    await store.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
     await store.saveOutfit(kid.id, '2026-05-05', { top: existing.id })
 
     await expect(failure(store.importBackup(file))).resolves.toMatch(/geen geldig Dress Kid back-upbestand/)
@@ -710,7 +718,7 @@ describe('createIndexedDbStore: back-up', () => {
     const items = await store.listItems()
     expect(items.map((i) => i.name)).toEqual(['Blijft'])
     expect(await bytesOf(items[0]!.photo)).toEqual([1, 2, 3, 250])
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
     expect(await store.listChildren()).toEqual([kid])
     expect(await store.getOutfit(kid.id, '2026-05-05')).toEqual({
       childId: kid.id,
@@ -783,7 +791,7 @@ describe('createIndexedDbStore: foto-cache', () => {
     const store = createIndexedDbStore(name)
     expect(await store.listItems()).toEqual([])
     const { openDB } = await import('idb')
-    const raw = await openDB(name, 2)
+    const raw = await openDB(name)
     await raw.put('items', {
       id: 'oud',
       category: 'top',
@@ -989,21 +997,21 @@ describe('createIndexedDbStore: geluid en voorlezen', () => {
   it('staat standaard aan en kan uit', async () => {
     const store = freshStore()
     expect((await store.getSettings()).soundEnabled).toBe(true)
-    await store.saveSettings({ currentSeason: 'summer', soundEnabled: false })
-    expect(await store.getSettings()).toEqual({ currentSeason: 'summer', soundEnabled: false })
-    await store.saveSettings({ currentSeason: 'summer', soundEnabled: true })
+    await store.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: 'summer', soundEnabled: false })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'summer', soundEnabled: false })
+    await store.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: 'summer', soundEnabled: true })
     expect((await store.getSettings()).soundEnabled).toBe(true)
   })
 
   it('saveSettings maakt van een ongeldige waarde de standaard en gooit nog steeds bij een onbekend seizoen', async () => {
     const store = freshStore()
-    await store.saveSettings({ currentSeason: 'winter', soundEnabled: 'nee' as unknown as boolean })
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
-    await store.saveSettings({ currentSeason: 'winter', soundEnabled: false })
+    await store.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: 'nee' as unknown as boolean })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true })
+    await store.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
     await expect(
-      failure(store.saveSettings({ currentSeason: 'lente', soundEnabled: true } as unknown as Settings)),
+      failure(store.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: 'lente', soundEnabled: true } as unknown as Settings)),
     ).resolves.toMatch('Onbekend seizoen.')
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
   })
 
   it('oude opgeslagen instellingen zonder soundEnabled krijgen true', async () => {
@@ -1011,22 +1019,22 @@ describe('createIndexedDbStore: geluid en voorlezen', () => {
     const store = createIndexedDbStore(name)
     expect(await store.listItems()).toEqual([])
     const { openDB } = await import('idb')
-    const raw = await openDB(name, 2)
+    const raw = await openDB(name)
     await raw.put('settings', { currentSeason: 'winter' }, 'settings')
     raw.close()
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true })
   })
 
   it('round-trip via de back-up, en een ongeldige waarde bij import wordt true', async () => {
     const source = freshStore()
-    await source.saveSettings({ currentSeason: 'all', soundEnabled: false })
-    expect((await backupJson(source)).settings).toEqual({ currentSeason: 'all', soundEnabled: false })
+    await source.saveSettings({ ...DEFAULT_SETTINGS, currentSeason: 'all', soundEnabled: false })
+    expect((await backupJson(source)).settings).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'all', soundEnabled: false })
     const target = freshStore()
     await target.importBackup(await source.exportBackup())
-    expect(await target.getSettings()).toEqual({ currentSeason: 'all', soundEnabled: false })
+    expect(await target.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'all', soundEnabled: false })
 
     await target.importBackup(jsonBlob(validBackup({ settings: { currentSeason: 'winter', soundEnabled: 'uit' } })))
-    expect(await target.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
+    expect(await target.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true })
   })
 })
 
@@ -1117,8 +1125,8 @@ describe('createIndexedDbStore: stickerboek', () => {
     const json = await backupJson(source)
     expect(json.outfits).toEqual(
       expect.arrayContaining([
-        { childId: k.id, date: '2026-04-01', outfit: {}, completedAt: 9_000 },
-        { childId: k.id, date: '2026-04-02', outfit: {} },
+        { childId: k.id, date: '2026-04-01', outfit: {}, completedAt: 9_000, laundryProcessed: false },
+        { childId: k.id, date: '2026-04-02', outfit: {}, laundryProcessed: false },
       ]),
     )
     const target = freshStore()
@@ -1147,7 +1155,12 @@ describe('createIndexedDbStore: stickerboek', () => {
         }),
       ),
     )
-    expect(await store.getOutfit('k1', '2026-01-01')).toEqual({ childId: 'k1', date: '2026-01-01', outfit: { top: 'a' } })
+    expect(await store.getOutfit('k1', '2026-01-01')).toEqual({
+      childId: 'k1',
+      date: '2026-01-01',
+      outfit: { top: 'a' },
+      laundryProcessed: true,
+    })
     expect((await store.getOutfit('k1', '2026-01-02'))?.completedAt).toBe(1_700_000_000_000)
     expect(await store.countCompletedDays('k1')).toBe(1)
   })
@@ -1164,9 +1177,14 @@ describe('createIndexedDbStore: oude back-ups', () => {
         }),
       ),
     )
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true })
     expect(await store.listChildren()).toEqual([{ id: 'k1', name: 'Noor', color: '#ff8800', sizes: {}, createdAt: 1 }])
-    expect(await store.getOutfit('k1', '2026-01-01')).toEqual({ childId: 'k1', date: '2026-01-01', outfit: { top: 'a' } })
+    expect(await store.getOutfit('k1', '2026-01-01')).toEqual({
+      childId: 'k1',
+      date: '2026-01-01',
+      outfit: { top: 'a' },
+      laundryProcessed: true,
+    })
     expect(await store.countCompletedDays('k1')).toBe(0)
   })
 
@@ -1181,8 +1199,318 @@ describe('createIndexedDbStore: oude back-ups', () => {
         }),
       ),
     )
-    expect(await store.getSettings()).toEqual({ currentSeason: 'summer', soundEnabled: true })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'summer', soundEnabled: true })
     expect((await store.listChildren())[0]).not.toHaveProperty('avatar')
     expect(await store.getOutfit('k1', '2026-01-01')).not.toHaveProperty('completedAt')
+  })
+})
+
+describe('createIndexedDbStore: was', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const DAY = 86_400_000
+
+  it('updateItem houdt washedAt bij: gezet bij in de was, behouden, gewist bij terug', async () => {
+    const store = freshStore()
+    const a = await store.addItem(newItem())
+    expect(a).not.toHaveProperty('washedAt')
+    vi.spyOn(Date, 'now').mockReturnValue(5_000)
+    expect(await store.updateItem(a.id, { available: false })).toMatchObject({ available: false, washedAt: 5_000 })
+    vi.spyOn(Date, 'now').mockReturnValue(9_000)
+    // Still in the wash (and other edits): the original moment stays.
+    expect(await store.updateItem(a.id, { available: false, name: 'Shirt' })).toMatchObject({ washedAt: 5_000 })
+    expect(await store.updateItem(a.id, { season: 'winter' })).toMatchObject({ washedAt: 5_000 })
+    const back = await store.updateItem(a.id, { available: true })
+    expect(back.available).toBe(true)
+    expect(back).not.toHaveProperty('washedAt')
+    expect(await store.getItem(a.id)).not.toHaveProperty('washedAt')
+  })
+
+  it('setItemsAvailable zet meerdere kledingstukken in en uit de was en negeert onbekende ids', async () => {
+    const store = freshStore()
+    const a = await store.addItem(newItem())
+    const b = await store.addItem(newItem({ category: 'bottom' }))
+    const c = await store.addItem(newItem({ category: 'socks' }))
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    await store.updateItem(b.id, { available: false })
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    await store.setItemsAvailable([a.id, b.id, a.id, 'weg'], false)
+    expect(await store.getItem(a.id)).toMatchObject({ available: false, washedAt: 2_000 })
+    // Was already in the wash: keeps its moment.
+    expect(await store.getItem(b.id)).toMatchObject({ available: false, washedAt: 1_000 })
+    expect(await store.getItem(c.id)).toMatchObject({ available: true })
+    expect(await store.getItem('weg')).toBeUndefined()
+
+    await store.setItemsAvailable([a.id, b.id], true)
+    for (const id of [a.id, b.id]) {
+      const item = await store.getItem(id)
+      expect(item?.available).toBe(true)
+      expect(item).not.toHaveProperty('washedAt')
+    }
+    await store.setItemsAvailable([], false)
+  })
+
+  it('processLaundry stopt de kleding van eerdere dagen in de was, één keer', async () => {
+    const store = freshStore()
+    const k = await store.addChild(newChild())
+    const top = await store.addItem(newItem())
+    const bottom = await store.addItem(newItem({ category: 'bottom' }))
+    const jacket = await store.addItem(newItem({ category: 'jacket' }))
+    const todayTop = await store.addItem(newItem())
+    await store.saveOutfit(k.id, '2026-03-08', { top: top.id, bottom: bottom.id, jacket: jacket.id })
+    await store.markOutfitCompleted(k.id, '2026-03-09')
+    await store.saveOutfit(k.id, '2026-03-10', { top: todayTop.id })
+
+    expect(await store.processLaundry('2026-03-10', 7_000)).toEqual({ washed: 2, returned: 0 })
+    expect(await store.getItem(top.id)).toMatchObject({ available: false, washedAt: 7_000 })
+    expect(await store.getItem(bottom.id)).toMatchObject({ available: false, washedAt: 7_000 })
+    expect(await store.getItem(jacket.id)).toMatchObject({ available: true })
+    expect(await store.getItem(todayTop.id)).toMatchObject({ available: true })
+    expect((await store.getOutfit(k.id, '2026-03-08'))?.laundryProcessed).toBe(true)
+    expect(await store.getOutfit(k.id, '2026-03-09')).toMatchObject({ laundryProcessed: true, completedAt: expect.any(Number) })
+    expect(await store.getOutfit(k.id, '2026-03-10')).not.toHaveProperty('laundryProcessed')
+
+    // Back from the wash by hand: the same day is not washed again.
+    await store.setItemsAvailable([top.id, bottom.id], true)
+    expect(await store.processLaundry('2026-03-10', 8_000)).toEqual({ washed: 0, returned: 0 })
+    expect((await store.getItem(top.id))?.available).toBe(true)
+
+    // Saving or completing a processed day keeps the mark.
+    await store.saveOutfit(k.id, '2026-03-08', { top: top.id })
+    await store.markOutfitCompleted(k.id, '2026-03-08')
+    expect((await store.getOutfit(k.id, '2026-03-08'))?.laundryProcessed).toBe(true)
+    expect(await store.processLaundry('2026-03-10', 8_000)).toEqual({ washed: 0, returned: 0 })
+
+    // The next day, today's outfit is handled.
+    expect(await store.processLaundry('2026-03-11', 9_000)).toEqual({ washed: 1, returned: 0 })
+    expect(await store.getItem(todayTop.id)).toMatchObject({ available: false, washedAt: 9_000 })
+  })
+
+  it('processLaundry volgt de ingestelde categorieën en negeert verwijderde kledingstukken', async () => {
+    const store = freshStore()
+    const k = await store.addChild(newChild())
+    const top = await store.addItem(newItem())
+    const shoes = await store.addItem(newItem({ category: 'shoes' }))
+    const gone = await store.addItem(newItem({ category: 'shoes' }))
+    await store.saveOutfit(k.id, '2026-03-09', { top: top.id, shoes: gone.id })
+    await store.saveOutfit(k.id, '2026-03-08', { shoes: shoes.id })
+    await store.deleteItem(gone.id)
+    await store.saveSettings({ ...DEFAULT_SETTINGS, autoWashCategories: ['shoes'] })
+    expect(await store.processLaundry('2026-03-10', 7_000)).toEqual({ washed: 1, returned: 0 })
+    expect((await store.getItem(top.id))?.available).toBe(true)
+    expect((await store.getItem(shoes.id))?.available).toBe(false)
+    expect((await store.getOutfit(k.id, '2026-03-09'))?.laundryProcessed).toBe(true)
+  })
+
+  it('processLaundry haalt kleding automatisch terug na autoReturnDays', async () => {
+    const name = `dress-kid-return-${Math.random().toString(36).slice(2)}`
+    const store = createIndexedDbStore(name)
+    const now = new Date(2026, 2, 10, 8, 0).getTime()
+    const old = await store.addItem(newItem())
+    const recent = await store.addItem(newItem({ category: 'bottom' }))
+    vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 2, 7, 0, 5).getTime())
+    await store.setItemsAvailable([old.id], false)
+    vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 2, 8, 23, 55).getTime())
+    await store.setItemsAvailable([recent.id], false)
+    vi.restoreAllMocks()
+    // Put away by hand before laundry tracking existed: no washedAt.
+    const { openDB } = await import('idb')
+    const raw = await openDB(name)
+    await raw.put('items', {
+      id: 'handmatig',
+      category: 'socks',
+      season: 'all',
+      available: false,
+      excludedIds: [],
+      createdAt: 1,
+      photo: { type: 'image/jpeg', data: new Uint8Array([7, 8]).buffer },
+    })
+    raw.close()
+
+    // Off by default.
+    expect(await store.processLaundry('2026-03-10', now)).toEqual({ washed: 0, returned: 0 })
+    await store.saveSettings({ ...DEFAULT_SETTINGS, autoReturnDays: 3 })
+    expect(await store.processLaundry('2026-03-10', now)).toEqual({ washed: 0, returned: 1 })
+    const back = await store.getItem(old.id)
+    expect(back?.available).toBe(true)
+    expect(back).not.toHaveProperty('washedAt')
+    expect((await store.getItem(recent.id))?.available).toBe(false)
+    // Calendar days: washed on the 8th, three days later (the 11th) it comes back.
+    expect(await store.processLaundry('2026-03-11', now + DAY)).toEqual({ washed: 0, returned: 1 })
+    expect((await store.getItem(recent.id))?.available).toBe(true)
+    expect(await store.processLaundry('2026-03-10', now + 1000 * DAY)).toEqual({ washed: 0, returned: 0 })
+    expect((await store.getItem('handmatig'))?.available).toBe(false)
+  })
+
+  it('processLaundry weigert een ongeldige datum', async () => {
+    const store = freshStore()
+    await expect(store.processLaundry('morgen')).rejects.toThrow()
+  })
+
+  it('instellingen: standaardwaarden en opschonen van autoWashCategories en autoReturnDays', async () => {
+    const store = freshStore()
+    expect(await store.getSettings()).toMatchObject({
+      autoWashCategories: ['top', 'bottom', 'dress', 'socks'],
+      autoReturnDays: 0,
+    })
+    await store.saveSettings({ ...DEFAULT_SETTINGS, autoWashCategories: ['socks', 'jacket', 'socks'], autoReturnDays: 4.7 })
+    expect(await store.getSettings()).toMatchObject({ autoWashCategories: ['socks', 'jacket'], autoReturnDays: 4 })
+    await store.saveSettings({
+      ...DEFAULT_SETTINGS,
+      autoWashCategories: 'top' as unknown as Category[],
+      autoReturnDays: -2,
+    })
+    expect(await store.getSettings()).toEqual(DEFAULT_SETTINGS)
+    await store.saveSettings({ ...DEFAULT_SETTINGS, autoWashCategories: [], autoReturnDays: 9999 })
+    expect(await store.getSettings()).toMatchObject({ autoWashCategories: [], autoReturnDays: 365 })
+    // Returned arrays are copies.
+    const settings = await store.getSettings()
+    settings.autoWashCategories.push('top')
+    expect((await store.getSettings()).autoWashCategories).toEqual([])
+    expect(DEFAULT_SETTINGS.autoWashCategories).toEqual(['top', 'bottom', 'dress', 'socks'])
+  })
+
+  it('back-up: washedAt, laundryProcessed en de wasinstellingen gaan mee', async () => {
+    const source = freshStore()
+    const k = await source.addChild(newChild())
+    const a = await source.addItem(newItem())
+    const b = await source.addItem(newItem({ category: 'bottom' }))
+    await source.saveSettings({ ...DEFAULT_SETTINGS, autoWashCategories: ['bottom'], autoReturnDays: 2 })
+    await source.saveOutfit(k.id, '2026-03-08', { bottom: b.id })
+    await source.saveOutfit(k.id, '2026-03-09', { top: a.id })
+    await source.processLaundry('2026-03-09', 4_000)
+
+    const json = await backupJson(source)
+    expect(json.settings).toEqual({ ...DEFAULT_SETTINGS, autoWashCategories: ['bottom'], autoReturnDays: 2 })
+    expect(json.items).toEqual([
+      expect.not.objectContaining({ washedAt: expect.anything() }),
+      expect.objectContaining({ id: b.id, available: false, washedAt: 4_000 }),
+    ])
+    expect(json.outfits).toEqual(
+      expect.arrayContaining([
+        { childId: k.id, date: '2026-03-08', outfit: { bottom: b.id }, laundryProcessed: true },
+        { childId: k.id, date: '2026-03-09', outfit: { top: a.id }, laundryProcessed: false },
+      ]),
+    )
+
+    const target = freshStore()
+    await target.importBackup(await source.exportBackup())
+    expect(await target.getSettings()).toEqual(await source.getSettings())
+    expect((await target.getItem(b.id))?.washedAt).toBe(4_000)
+    expect(await target.getOutfit(k.id, '2026-03-08')).toMatchObject({ laundryProcessed: true })
+    // An unprocessed day stays unprocessed.
+    expect(await target.getOutfit(k.id, '2026-03-09')).not.toHaveProperty('laundryProcessed')
+  })
+
+  it('een oude back-up zonder wasvelden: alle dagen verwerkt, standaardinstellingen, niets in de was', async () => {
+    const store = freshStore()
+    await store.importBackup(
+      jsonBlob(
+        validBackup({
+          settings: { currentSeason: 'winter', soundEnabled: false },
+          items: [
+            { id: 'a', category: 'top', season: 'all', available: true, excludedIds: [], createdAt: 1, photo: PNG_DATA_URL },
+            { id: 'b', category: 'bottom', season: 'all', available: false, excludedIds: [], createdAt: 2, photo: PNG_DATA_URL },
+          ],
+          outfits: [
+            { childId: 'k1', date: '2026-01-01', outfit: { top: 'a' } },
+            { childId: 'k1', date: todayKey(), outfit: { top: 'a' } },
+            { childId: 'k1', date: '2999-01-01', outfit: { top: 'a' } },
+          ],
+        }),
+      ),
+    )
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
+    expect((await store.getOutfit('k1', '2026-01-01'))?.laundryProcessed).toBe(true)
+    // Today's and later outfits of an old backup stay unprocessed.
+    expect(await store.getOutfit('k1', todayKey())).not.toHaveProperty('laundryProcessed')
+    expect(await store.getOutfit('k1', '2999-01-01')).not.toHaveProperty('laundryProcessed')
+    expect(await store.getItem('b')).not.toHaveProperty('washedAt')
+    await store.saveSettings({ ...DEFAULT_SETTINGS, autoReturnDays: 1 })
+    expect(await store.processLaundry('2026-03-10')).toEqual({ washed: 0, returned: 0 })
+    expect((await store.getItem('a'))?.available).toBe(true)
+    expect((await store.getItem('b'))?.available).toBe(false)
+  })
+
+  it('import verdraagt ongeldige wasvelden', async () => {
+    const store = freshStore()
+    await store.importBackup(
+      jsonBlob(
+        validBackup({
+          settings: { currentSeason: 'summer', autoWashCategories: ['top', 'hoed', 7], autoReturnDays: 'drie' },
+          items: [
+            { id: 'a', category: 'top', season: 'all', available: false, washedAt: 'gisteren', excludedIds: [], createdAt: 1, photo: PNG_DATA_URL },
+            { id: 'b', category: 'bottom', season: 'all', available: true, washedAt: 5_000, excludedIds: [], createdAt: 2, photo: PNG_DATA_URL },
+            { id: 'c', category: 'socks', season: 'all', available: false, washedAt: 6_000, excludedIds: [], createdAt: 3, photo: PNG_DATA_URL },
+          ],
+          outfits: [
+            { childId: 'k1', date: '2026-01-01', outfit: { top: 'a' }, laundryProcessed: 'ja' },
+            { childId: 'k1', date: '2026-01-02', outfit: { bottom: 'b' }, laundryProcessed: false },
+          ],
+        }),
+      ),
+    )
+    expect(await store.getSettings()).toEqual({
+      ...DEFAULT_SETTINGS,
+      currentSeason: 'summer',
+      autoWashCategories: ['top'],
+      autoReturnDays: 0,
+    })
+    expect(await store.getItem('a')).not.toHaveProperty('washedAt')
+    expect(await store.getItem('b')).not.toHaveProperty('washedAt')
+    expect((await store.getItem('c'))?.washedAt).toBe(6_000)
+    expect((await store.getOutfit('k1', '2026-01-01'))?.laundryProcessed).toBe(true)
+    expect(await store.getOutfit('k1', '2026-01-02')).not.toHaveProperty('laundryProcessed')
+  })
+})
+
+describe('createIndexedDbStore: database-upgrade naar versie 3', () => {
+  it('markeert bestaande outfits als verwerkt en behoudt de data', async () => {
+    const name = `dress-kid-v2-${Math.random().toString(36).slice(2)}`
+    const { openDB } = await import('idb')
+    const raw = await openDB(name, 2, {
+      upgrade(database) {
+        database.createObjectStore('items', { keyPath: 'id' })
+        database.createObjectStore('settings')
+        database.createObjectStore('children', { keyPath: 'id' })
+        const outfits = database.createObjectStore('outfits', { keyPath: ['childId', 'date'] })
+        outfits.createIndex('childId', 'childId')
+        database.createObjectStore('pin')
+      },
+    })
+    await raw.put('items', {
+      id: 'oud',
+      category: 'top',
+      season: 'all',
+      available: true,
+      excludedIds: [],
+      createdAt: 1,
+      photo: { type: 'image/jpeg', data: new Uint8Array([7, 8]).buffer },
+    })
+    await raw.put('settings', { currentSeason: 'winter', soundEnabled: false }, 'settings')
+    await raw.put('children', { id: 'k1', name: 'Noor', color: '#ff8800', sizes: {}, createdAt: 1 })
+    await raw.put('outfits', { childId: 'k1', date: '2026-01-01', outfit: { top: 'oud' }, completedAt: 3 })
+    await raw.put('outfits', { childId: 'k1', date: '2026-01-02', outfit: { top: 'oud' } })
+    await raw.put('outfits', { childId: 'k1', date: todayKey(), outfit: { top: 'oud' } })
+    await raw.put('outfits', { childId: 'k1', date: '2999-01-01', outfit: { top: 'oud' } })
+    raw.close()
+
+    const store = createIndexedDbStore(name)
+    expect(await store.getOutfit('k1', '2026-01-01')).toEqual({
+      childId: 'k1',
+      date: '2026-01-01',
+      outfit: { top: 'oud' },
+      completedAt: 3,
+      laundryProcessed: true,
+    })
+    expect((await store.getOutfit('k1', '2026-01-02'))?.laundryProcessed).toBe(true)
+    // Today's and future outfits are not marked.
+    expect(await store.getOutfit('k1', todayKey())).not.toHaveProperty('laundryProcessed')
+    expect(await store.getOutfit('k1', '2999-01-01')).not.toHaveProperty('laundryProcessed')
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
+    expect(await store.processLaundry('2026-03-10')).toEqual({ washed: 0, returned: 0 })
+    expect((await store.getItem('oud'))?.available).toBe(true)
   })
 })

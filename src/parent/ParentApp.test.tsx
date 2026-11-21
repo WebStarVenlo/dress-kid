@@ -402,7 +402,7 @@ describe('tabbalk', () => {
     await unlock()
     const nav = screen.getByRole('navigation', { name: 'Ouderbeheer' })
     const tabs = within(nav).getAllByRole('button')
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Kast', 'Kinderen', 'Instellingen', 'Back-up'])
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Kast', 'Wasmand', 'Kinderen', 'Instellingen', 'Back-up'])
     expect(within(nav).getByRole('button', { name: 'Kast' })).toHaveAttribute('aria-current', 'page')
 
     fireEvent.click(within(nav).getByRole('button', { name: 'Kinderen' }))
@@ -411,6 +411,9 @@ describe('tabbalk', () => {
     expect(within(nav).getByRole('button', { name: 'Kast' })).not.toHaveAttribute('aria-current')
     // The floating add button only belongs to the wardrobe.
     expect(screen.queryByRole('button', { name: 'Kleding toevoegen' })).not.toBeInTheDocument()
+
+    fireEvent.click(within(nav).getByRole('button', { name: 'Wasmand' }))
+    expect(await screen.findByText('De wasmand is leeg')).toBeInTheDocument()
 
     fireEvent.click(within(nav).getByRole('button', { name: 'Instellingen' }))
     await screen.findByRole('switch', { name: 'Geluid en voorlezen' })

@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, vi } from 'vitest'
+import { DEFAULT_SETTINGS } from '../domain/types'
 import type { Settings } from '../domain/types'
+import { ensureLaundryProcessed } from '../shared/hooks'
 import { createIndexedDbStore } from '../storage'
 import type { WardrobeStore } from '../storage'
 import SettingsPanel from './SettingsPanel'
@@ -46,7 +48,7 @@ describe('geluid en voorlezen', () => {
   }
 
   it('negeert een tweede tik zolang het opslaan bezig is', async () => {
-    await renderLive({ currentSeason: 'winter', soundEnabled: true })
+    await renderLive({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true })
     const save = vi.spyOn(store, 'saveSettings')
     const toggle = screen.getByRole('switch', { name: 'Geluid en voorlezen' })
     fireEvent.click(toggle)
@@ -57,11 +59,11 @@ describe('geluid en voorlezen', () => {
     )
     await waitFor(() => expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toBeEnabled())
     expect(save).toHaveBeenCalledTimes(1)
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
   })
 
   it('zet geluid uit en weer aan en bewaart ook het seizoen', async () => {
-    await renderLive({ currentSeason: 'winter', soundEnabled: true })
+    await renderLive({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true })
     const toggle = screen.getByRole('switch', { name: 'Geluid en voorlezen' })
     expect(toggle).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByText('Geluidjes en voorlezen van de vragen in de kindmodus.')).toBeInTheDocument()
@@ -69,16 +71,16 @@ describe('geluid en voorlezen', () => {
     await waitFor(() =>
       expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toHaveAttribute('aria-checked', 'false'),
     )
-    expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: false })
+    expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: false })
     fireEvent.click(screen.getByRole('switch', { name: 'Geluid en voorlezen' }))
-    await waitFor(async () => expect(await store.getSettings()).toEqual({ currentSeason: 'winter', soundEnabled: true }))
+    await waitFor(async () => expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'winter', soundEnabled: true }))
   })
 
   it('behoudt de geluidsinstelling bij het kiezen van een seizoen', async () => {
-    await renderLive({ currentSeason: 'all', soundEnabled: false })
+    await renderLive({ ...DEFAULT_SETTINGS, currentSeason: 'all', soundEnabled: false })
     expect(screen.getByRole('switch', { name: 'Geluid en voorlezen' })).toHaveAttribute('aria-checked', 'false')
     fireEvent.click(screen.getByRole('radio', { name: 'Zomer' }))
-    await waitFor(async () => expect(await store.getSettings()).toEqual({ currentSeason: 'summer', soundEnabled: false }))
+    await waitFor(async () => expect(await store.getSettings()).toEqual({ ...DEFAULT_SETTINGS, currentSeason: 'summer', soundEnabled: false }))
   })
 })
 
@@ -205,4 +207,56 @@ it('meldt het als de pincode-instelling niet kan worden geladen', async () => {
   const settings = await store.getSettings()
   render(<SettingsPanel store={broken} settings={settings} reload={async () => undefined} />)
   expect(await screen.findByRole('alert')).toHaveTextContent('kon niet worden geladen')
+})
+
+describe('was', () => {
+  async function renderLive(initial: Settings) {
+    await store.saveSettings(initial)
+    const loaded = await store.getSettings()
+    function Panel() {
+      const [settings, setSettings] = useState(loaded)
+      return <SettingsPanel store={store} settings={settings} reload={async () => setSettings(await store.getSettings())} />
+    }
+    render(<Panel />)
+  }
+
+  it('toont de standaardcategorieën als aan', async () => {
+    await renderLive(DEFAULT_SETTINGS)
+    expect(screen.getByRole('button', { name: /Shirt/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /Schoenen/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('radio', { name: 'Uit' })).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('zet een categorie aan en uit en bewaart dat', async () => {
+    await renderLive(DEFAULT_SETTINGS)
+    fireEvent.click(screen.getByRole('button', { name: /Schoenen/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Schoenen/ })).toHaveAttribute('aria-pressed', 'true'))
+    expect((await store.getSettings()).autoWashCategories).toEqual(['top', 'bottom', 'dress', 'socks', 'shoes'])
+    await waitFor(() => expect(screen.getByRole('button', { name: /Shirt/ })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: /Shirt/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Shirt/ })).toHaveAttribute('aria-pressed', 'false'))
+    expect((await store.getSettings()).autoWashCategories).toEqual(['bottom', 'dress', 'socks', 'shoes'])
+  })
+
+  it('bewaart het aantal dagen voor automatisch terugkomen', async () => {
+    await renderLive(DEFAULT_SETTINGS)
+    fireEvent.click(screen.getByRole('radio', { name: '3 dagen' }))
+    await waitFor(() => expect(screen.getByRole('radio', { name: '3 dagen' })).toHaveAttribute('aria-checked', 'true'))
+    expect((await store.getSettings()).autoReturnDays).toBe(3)
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Uit' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('radio', { name: 'Uit' }))
+    await waitFor(async () => expect((await store.getSettings()).autoReturnDays).toBe(0))
+  })
+
+  it('een wijziging van de wasinstellingen laat de wasronde van vandaag opnieuw draaien', async () => {
+    await renderLive(DEFAULT_SETTINGS)
+    const run = vi.spyOn(store, 'processLaundry')
+    await ensureLaundryProcessed(store)
+    await ensureLaundryProcessed(store)
+    expect(run).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('radio', { name: '3 dagen' }))
+    await waitFor(() => expect(screen.getByRole('radio', { name: '3 dagen' })).toHaveAttribute('aria-checked', 'true'))
+    await ensureLaundryProcessed(store)
+    expect(run).toHaveBeenCalledTimes(2)
+  })
 })
